@@ -2,6 +2,21 @@
 
 The Wobkey Crush 80 (VID `0x320F`, PID `0x5055`) ships with a firmware bug: setting the hue (H byte) via the VIA USB protocol has no effect on the displayed color. This repository contains a binary patch that fixes the bug and a custom SignalRGB plugin that syncs the keyboard's backlight color to SignalRGB effects.
 
+## Per-key RGB (v1.06)
+
+The per-key patch, Linux host tool, and wired SignalRGB V3 plugin are documented
+in [docs/PER-KEY-RGB.md](docs/PER-KEY-RGB.md), including hardware findings,
+installation, wire protocol, and verification status.
+
+- Build: `python scripts/patch_firmware_per_key.py`
+- Control: `python scripts/per_key_rgb.py --help`
+- SignalRGB per-key: `SignalRGB/WobkeyCrush80_v3.js` — requires the per-key
+  firmware; copy it into SignalRGB's custom Plugins folder and remove older
+  wired custom plugins for this device before restarting SignalRGB.
+- V1/V2 plugins described below remain whole-board color controllers for
+  older firmware. V3 is wired USB only; its Windows SignalRGB runtime still
+  needs an application-side check.
+
 ## The Problem
 
 The VIA SET handler at `0xDA20` stores the H byte to the internal state struct but then overwrites the RGB fields with stale cached values from global RAM instead of converting H to RGB. The result is that any color set through VIA (including SignalRGB) is ignored — the keyboard stays on whatever color was last set locally.

@@ -2,13 +2,15 @@
 
 ## Conclusion
 
-**Independent per-key color output is demonstrated on the physical keyboard.**
-A diagnostic patch made **Esc red** and **F1 green** simultaneously. The user
-confirmed both colors on 2026-09-25.
+**Host-controlled per-key RGB is working on the physical keyboard over USB.**
+An initial diagnostic made Esc red and F1 green. The completed patch then
+accepted RGB updates from `scripts/per_key_rgb.py`, and the user physically
+confirmed **Esc green and F1 blue** on 2026-09-25.
 
-This proves the firmware-to-LED rendering path. It does **not** by itself prove
-host-supplied RGB updates, streaming performance, complete physical key mapping,
-wireless operation, or persistence across power cycles.
+All 92 supplied RGB slots were written and read back through the real device;
+the Esc/F1 check proves that host-supplied values reach the physical LEDs.
+Streaming performance, complete physical key mapping, and wireless operation
+remain unverified. Per-key data is volatile, not persisted across power cycles.
 
 ## Verified device and baseline
 
@@ -228,3 +230,330 @@ protocol offsets are not an implementation specification.
 
 Saved per-key profiles, Bluetooth, 2.4 GHz throughput, and a SignalRGB plugin
 are separate capabilities; the diagnostic proves none of them.
+
+## Working USB patch design
+
+### Owned storage and startup
+
+The baseline initializes `gp = 0x80800` and a downward-growing stack at
+`0xA0000`. Its startup code clears BSS only through `0x827F8`. Rather than
+treating an unreferenced address as an allocation, the patch reserves the top
+288 bytes of the original stack region:
+
+- New initial SP: `0x9FEE0`, in both startup paths.
+- Per-key RGB array: `0x9FEE0..0x9FFF3` (92 × 3 bytes).
+- Enable flag: `0x9FFFC` (zero or one).
+- Startup clears the entire reserved 288-byte region before calling the
+  original main entry at `0x36D4`.
+- The original BSS bounds, GP, framebuffers, and constant tables are unchanged.
+
+The two SP setup instructions at image offsets `0x44` and `0x1CE` are adjusted.
+The two startup call sequences at `0x172..0x189` and `0x2D0..0x2E7` are routed
+through an absolute-address initialization routine, accounting for the second
+startup sequence being copied to instruction memory at address zero.
+
+This is an explicit stack reservation, not a claim that a static-reference
+scan proves arbitrary RAM free. Offline execution must check both startup
+paths. Wired operation is the acceptance target; wireless power-state behavior
+is not established by this design.
+
+### Rendering behavior
+
+The hardware-proven effect-6 store splice at `0xAA3C` remains the interception
+point. Disabled: replay the original RGB stores. Enabled: use the raw LED
+offset implied by `a4 - t3` to load the reserved RGB triplet, scale each
+component by the OEM brightness byte in `t6` using `(component * t6) >> 8`,
+and write to the existing framebuffer. Preserve every modified register and
+restore SP on both paths. Do not apply the global saturation overlay to
+host-provided RGB values.
+
+Other effects remain OEM-controlled. Returning to effect 6 while enabled
+resumes the supplied colors. Explicit disable returns effect 6 to its normal
+color source. A cold boot initializes disabled mode and a black RGB array.
+Per-key RGB data is not saved to flash.
+
+### VIA 11 wire contract, version 1
+
+Use normal 32-byte VIA reports, **vendor channel `0x7F`**. Intercept the
+custom-SET entry at `0xDBAC` and custom-GET entry at `0xDC34`, before the OEM
+channel and legacy-format dispatch. All other channels replay the displaced
+instruction and continue through the OEM handler.
+
+Every custom response has `[command, 0x7F, operation, status, ...]`.
+Commands are SET `0x07` and GET `0x08`. Status is zero for success, 1 for an
+unsupported operation, 2 for an invalid LED range, and 3 for an invalid mode.
+All validation precedes writes to the RGB array or mode flag.
+
+| Operation | Request bytes after operation | Successful response |
+|---|---|---|
+| GET 0: capabilities | Zero padding | Bytes 4..7 `PKRG`; byte 8 protocol version 1; byte 9 LED count 92; byte 10 chunk limit 8; byte 11 enabled flag |
+| GET 1: mode | Zero padding | Byte 4 enabled flag |
+| SET 1: mode | Byte 3 zero; byte 4 mode, exactly 0 or 1 | Byte 4 accepted mode |
+| GET 2: RGB chunk | Byte 3 zero; byte 4 start; byte 5 count | Same start/count; RGB triplets at byte 6 onward |
+| SET 2: RGB chunk | Byte 3 zero; byte 4 start; byte 5 count; RGB triplets at byte 6 onward | Same start/count and RGB data, status zero |
+
+Valid RGB ranges satisfy `1 <= count <= 8`, `start < 92`, and
+`start + count <= 92`. The maximum data length is 24 bytes, so neither reads
+nor writes exceed the 32-byte report. Capability discovery is read-only; a
+host must require the signature/version/count before attempting custom SETs.
+
+### Implementation plan
+
+**Goal:** host-supplied wired USB per-key colors with deterministic startup,
+explicit enable/disable, bounded transfers, and preserved OEM configuration.
+
+**Architecture:** extend the existing binary patch workflow, preserve the OEM
+LED transport, and expose the array through the early VIA 11 custom handlers.
+The host CLI uses the repository's existing HID discovery/report framing.
+
+**Tech stack:** Python standard library for build/control; RV32I/M injection;
+Unicorn for machine-code regression checks.
+
+1. `scripts/patch_firmware_per_key.py`: build an image only from the exact
+   baseline SHA-256, verify splice bytes and empty caves, assemble startup,
+   renderer, and GET/SET routines, and update the CRC. Expose
+   `build_image(source: bytes) -> bytes` for offline verification. Output
+   `firmware/firmware_per_key_v2.bin` and its matching OTA-wrapped image.
+2. `tests/test_per_key_firmware.py`: execute generated instructions, not mocked
+   behavior. Cover both reset paths, zeroed storage, fallback stores, register
+   preservation, independent RGB output, capability discovery, mode changes,
+   chunk round trips, boundary rejection without mutation, and OEM-channel
+   fallback. Run the RGB behavior against the baseline first to observe the
+   missing behavior, then against the patch.
+3. `scripts/per_key_rgb.py`: provide `info`, `enable`, `disable`, `fill`,
+   `set`, `read`, and full `frame` upload commands. Require capability
+   discovery, validate complete inputs before writes, match acknowledgements,
+   and verify chunk writes through RGB readback. `enable` selects effect 6;
+   `disable` changes only the override flag. No automatic flash or SAVE.
+4. Build and exercise the actual CLI, run the machine-code regressions, and
+   dry-run the existing OTA flasher. Back up configuration before hardware
+   updates; verify the firmware CRC after reboot; restore and read back the
+   complete keymap after flashing. Prove host-driven changes on Esc/F1 with
+   the user and record the observed result below. Do not claim streaming
+   throughput or complete physical key mapping from this two-key check.
+
+## Build and use the wired patch
+
+Build from the repository's exact v1.06 hue-patched baseline:
+
+```sh
+python scripts/patch_firmware_per_key.py
+```
+
+Outputs:
+
+- `firmware/firmware_per_key_v2.bin`: standalone firmware, 122,196 bytes.
+- `firmware/code_2M_per_key_v2.bin`: matching 2 MiB OTA wrapper.
+- Firmware CRC footer: `0xE5BE2E50`.
+- Standalone SHA-256:
+  `f7c1a736b8172db26ba07f6eba2b094b607e8067c91e2f1807eba767e630a7cc`.
+- Injected code uses 632 of the verified 1,220 cave bytes.
+
+The builder rejects other baseline images rather than guessing new offsets.
+It does not connect to or flash the keyboard.
+
+Before a flash, close other keyboard-control software and save a fresh backup
+under a filename that does not overwrite an earlier backup:
+
+```sh
+python scripts/via_backup.py save /path/to/pre-per-key-backup.json
+python scripts/flash_ota.py --dry-run firmware/firmware_per_key_v2.bin
+# Only after accepting the recovery risk described above:
+python scripts/flash_ota.py firmware/firmware_per_key_v2.bin
+python scripts/via_backup.py restore /path/to/pre-per-key-backup.json
+```
+
+The restore command now compares current keycodes, restores changed entries
+including `0x0000` and `0xFFFF`, and verifies every restored keymap byte. A
+failed restore produces a failing exit status. Keep the original backup even
+after a successful restore.
+
+The following commands use the wired VIA interface only. Capability discovery
+must succeed before the tool sends any per-key SET request:
+
+```sh
+python scripts/per_key_rgb.py info
+python scripts/per_key_rgb.py fill 000000
+python scripts/per_key_rgb.py set 0=00ff00 1=0000ff
+python scripts/per_key_rgb.py read 0 2
+python scripts/per_key_rgb.py disable
+python scripts/per_key_rgb.py enable
+```
+
+`fill`, `set`, and `frame` verify supplied RGB values through firmware
+readback, enable the override, and select effect 6. `set` retains other LED
+colors. `disable` leaves the selected OEM effect unchanged and restores its
+normal rendering. `enable` uses the existing RGB buffer and selects effect 6.
+Brightness remains the keyboard's current brightness setting.
+
+Full frames use a JSON array of exactly 92 `[R, G, B]` triplets, with integer
+channels in `0..255`:
+
+```sh
+python scripts/per_key_rgb.py frame /path/to/frame.json
+python scripts/per_key_rgb.py read
+```
+
+Uploads are chunked, not atomically double-buffered. No frame-rate guarantee
+has been measured. `read` returns supplied RGB values, before global
+brightness scaling; maximum firmware brightness is 192/256 of the supplied
+channel value. Black remains black, and neutral RGB values stay neutral.
+
+### Automated verification
+
+```sh
+python -m venv /tmp/wobkey-per-key-tests
+/tmp/wobkey-per-key-tests/bin/python -m pip install -r tests/requirements.txt
+/tmp/wobkey-per-key-tests/bin/python -m unittest discover -s tests -v
+```
+
+Seventeen regressions passed during implementation. They cover generated
+machine code, both startup paths, full effect-6 rendering, register
+preservation, protocol bounds, host-client frame round trips, stock-firmware
+rejection, and exact restoration of disabled/default keys. The original
+firmware failed capability discovery and stack-reservation expectations; the
+original restore routine failed the disabled/default-key regression.
+
+The actual host CLI also rejected the previously installed diagnostic image
+without sending RGB changes, and the existing flasher accepted the working
+image in dry-run mode. These are offline/transport-preflight results, not
+physical confirmation of the working host-driven firmware.
+
+## Working-patch hardware verification, 2026-09-25
+
+With explicit user authorization, the working image was flashed successfully.
+The OEM identity query after reboot reported **CRC `0xE5BE2E50`**, matching the
+generated image. The device remained available through its normal VIA
+interface.
+
+Results exercised on the connected keyboard:
+
+1. `per_key_rgb.py info` returned signature/version-compatible capabilities:
+   protocol 1, 92 LEDs, eight LEDs per chunk, override **disabled**.
+2. Reading all 92 RGB slots after boot returned zero triplets.
+3. The actual CLI uploaded a varying full frame through twelve bounded
+   packets, then read back all **276 bytes** correctly, including the last
+   partial chunk.
+4. Explicit disable and enable were acknowledged and read back. The supplied
+   frame was preserved across both transitions.
+5. `fill 000000` followed by `set 0=00ff00 1=0000ff` produced exact supplied-RGB
+   readback: Esc green, F1 blue, and the other 90 logical slots black.
+   The user then physically confirmed **Esc green and F1 blue**. This proves
+   the working host-command → RGB storage → renderer → LED path, rather than
+   only the earlier fixed-color diagnostic.
+
+A fresh pre-flash backup was saved to:
+
+```text
+~/.local/state/wobkey/via-before-working-perkey-20260925T212713.json
+```
+
+The current restore command restored the keymap and verified all 1,024 bytes.
+The most recent pre-flash lighting was effect **4**, brightness 9, speed 2,
+hue 183, saturation 255; it was restored and read back before the RGB tests.
+The working patch was then left in effect 6 with the green/blue inspection
+pattern. No per-key profile was saved to flash.
+
+The working firmware remains installed with per-key mode enabled and the
+green/blue pattern active. RGB values are volatile: power cycling starts with
+a cleared array and the override disabled. Complete physical key mapping,
+wireless behavior, and animation throughput remain unverified.
+
+## SignalRGB V3 per-key plugin
+
+`SignalRGB/WobkeyCrush80_v3.js` is a standalone **wired USB** plugin for the
+working per-key firmware above. It does not support the 2.4 GHz dongle or
+Bluetooth and does not flash firmware. V1/V2 plugins remain available for
+older firmware; do not run an older wired plugin alongside V3.
+
+### Install
+
+1. Keep the working per-key firmware installed; the hue-only images do not
+   expose the required `PKRG` protocol.
+2. In SignalRGB, open the Crush 80's **Device Information → Plugins** folder.
+3. Move older wired custom plugins for this keyboard out of that folder.
+   Renaming them while leaving a `.js` extension in the same folder is not
+   sufficient: they can still compete for the device.
+4. Copy `SignalRGB/WobkeyCrush80_v3.js` into the custom plugins folder and
+   restart SignalRGB completely.
+5. Use **Wobkey Crush 80 (Wired) V3 Per-Key**, enable streaming, and place it
+   on the SignalRGB canvas. Adjust its size/position in the layout as needed.
+
+The current Windows installer catalog still contains the older plugin
+versions; V3 is installed manually using the steps above. Do not select an
+older firmware image in that installer after installing the per-key patch.
+
+### Behavior
+
+- Opens only interface 1, usage page `0xFF60`, usage `0x61`.
+- Requires the capability signature, protocol version, 92-slot count, and
+  eight-slot chunk limit before sending any lighting writes.
+- Captures the current OEM effect, brightness, per-key enable state, and all
+  92 RGB values before taking control.
+- Uses direct RGB from `device.color(x, y)`: black is transmitted as black,
+  white remains white, and colors are not averaged or reduced to HSV.
+- Uses effect 6 and hardware brightness 9 while streaming. SignalRGB already
+  applies its brightness setting to sampled colors, so V3 does not apply it
+  a second time.
+- Sends only changed eight-slot chunks, including the final four-slot chunk,
+  and checks every acknowledgement. It does not cache a failed write as sent.
+- On graceful shutdown or streaming disable, restores the captured RGB array,
+  enable state, effect, and brightness. A transport error stops streaming and
+  attempts restoration; unplugged hardware cannot be restored until reachable.
+- Does not send SAVE, OTA, wireless-control, or reset commands.
+
+Do not run VIA, the Python RGB tool, or another RGB controller against the
+same interface while SignalRGB is streaming. Transport errors are reported
+in the device console; fix the conflict and toggle streaming to reinitialize.
+
+### Layout evidence
+
+The v1.06 switch-to-LED table at image offset `0x1BC74` maps 91 of the 92
+slots. Its consumer at `0x12A64..0x12A68` indexes that table from the scanned
+switch index before handling reactive effects. This supplies actual firmware
+LED indices rather than the old synthetic 22 × 7 canvas.
+
+The remaining slot, **52**, was illuminated by itself through the working
+firmware. The user identified **Caps Lock**. Its canvas position is shared
+with the firmware-mapped Caps Lock slot 51. The three Space slots and the
+alternate Enter-area slot are represented in the ANSI TKL canvas geometry.
+
+Esc 0, F1 1, and Caps Lock 52 have physical observations. The other switch
+names come from the firmware map and the repository's VIA layout; the canvas
+geometry is ANSI-oriented and has not been individually checked on every key
+or alternate PCB layout. Underglow is outside this 92-slot renderer.
+
+### Verification and runtime limit
+
+```sh
+node --experimental-vm-modules --test tests/test_signalrgb_v3.mjs
+```
+
+Six JavaScript regressions pass: independent black/white/RGB rendering,
+incompatible-firmware rejection without writes, restoration of prior OEM and
+per-key states, changed-chunk behavior, error recovery, and functional key
+bindings/endpoint selection. Node emits its expected experimental-VM warning.
+
+The unchanged V3 JavaScript was also executed through a temporary native-HID
+bridge against the connected keyboard:
+
+- Three distinct canvas frames each produced correct readback for all 92
+  supplied RGB values, using 12 RGB packets per changed full frame.
+- Repeating an unchanged frame sent zero RGB packets.
+- `Shutdown()` restored the complete previous RGB frame, enable state,
+  effect, and brightness; all were read back and matched.
+- The user's original colors/settings were restored after the mapping and
+  lifecycle checks.
+
+**The Windows SignalRGB application itself was not run in this environment.**
+Its device detection, layout UI, Windows HID integration, and sustained frame
+rate still require a check in SignalRGB. The bridge verified real plugin code
+and hardware packets, not the actual application runtime.
+
+Primary API references:
+
+- [SignalRGB plugin lifecycle and exports](https://docs.signalrgb.com/developer/plugins/)
+- [HID writes, reads, actual read size, and buffer clearing](https://docs.signalrgb.com/developer/plugins/writes-and-reads/)
+- [Canvas sampling and brightness semantics](https://docs.signalrgb.com/developer/plugins/utilities/)
+- [Functional keyboard names](https://docs.signalrgb.com/developer/plugins/key-names/)
+- [Installing a custom plugin](https://docs.signalrgb.com/troubleshooting/advanced-troubleshooting/replacing-plugin/)
