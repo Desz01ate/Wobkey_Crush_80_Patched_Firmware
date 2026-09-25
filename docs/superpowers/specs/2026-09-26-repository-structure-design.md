@@ -39,10 +39,11 @@ firmware/
     v1.04/                # legacy patched standalone/OTA images
     v1.06/                # hue-patched standalone/OTA images
     v1.06-per-key/        # per-key standalone/OTA images
+  tools/patching/         # reproducible binary patch builders
 research/
   docs/                   # investigation and detailed technical report
   vendor-flasher/         # tracked decompiled flasher source/resources
-  ghidra/                 # Ghidra scripts
+  tools/                  # extraction, disassembly, and analysis utilities
   notes/                  # version comparison and other engineering notes
 tests/
 ```
@@ -53,15 +54,15 @@ The tracked `via_config.json` becomes a sample/config reference under `hardware/
 
 ## File migration and behavior changes
 
-- Move Linux Python tools from `scripts/` into `host/linux/`, preserving import relationships among `per_key_rgb.py` and `via_backup.py`. Update each script's root-relative inputs/outputs and all test/documentation references.
+- Move device-facing Python utilities from `scripts/` into `host/linux/`, preserving imports among `per_key_rgb.py` and `via_backup.py`. Move binary patch builders into `firmware/tools/patching/`; move extraction, disassembly, and static analysis scripts into `research/tools/`. Update root-relative inputs/outputs and every test/documentation reference.
 - Move the installer project and solution to the flattened Windows host-tool directory. Update its project resource links, embedded catalog paths, `.gitignore` placement/removal, and the GitHub Actions project path. The published output must still contain the same catalog, firmware files, and plugin files at the locations the application expects.
 - Move all tracked SignalRGB plugin files under `plugins/signalrgb/wired/` or `wireless/`; update tests, installer packaging entries, README guidance, and catalog source paths. Keep `destinationFile` values unchanged so SignalRGB's install filenames do not change.
 - Move the VIA browser tool to `plugins/tools/` and update documentation links.
 - Move tracked `via_config.json` and `Crush80-RGB-USB.JSON` to `hardware/layouts/`; move the udev rule to `hardware/udev/` and update the install command.
 - Move original updater executables to `firmware/vendor/`, extracted stock images and parameters to `firmware/sources/`, and patched binaries to versioned `firmware/releases/` directories. Preserve exact bytes and filenames. Update patch-builder defaults, test fixture paths, installer catalog `file` entries, and user documentation. Do not regenerate or alter firmware binaries during this change.
-- Move tracked decompiler output and resource files together under `research/vendor-flasher/`; adjust the extraction script to resolve the `.resx` from its own location and write outputs to an explicit firmware source directory. Move Ghidra scripts, including the tracked legacy scripts, under `research/ghidra/`, technical writeups under `research/docs/`, and the version update note under `research/notes/`. Move the per-key guide to `docs/user/`.
+- Move tracked decompiler output and resource files together under `research/vendor-flasher/`; adjust the extraction script to resolve the `.resx` from its own location and write outputs to an explicit firmware source directory. Move Ghidra and other analysis utilities under `research/tools/`, technical writeups under `research/docs/`, and the version update note under `research/notes/`. Move the per-key guide to `docs/user/`.
 - Remove only tracked Python bytecode caches as generated artifacts. Add a root `.gitignore` for Python caches, virtual environments, .NET `bin/`/`obj/`, and standard local build outputs. Keep the nested .NET ignore rules only if still needed; prefer one root policy after validating it covers the project.
-- Preserve pre-existing untracked/ignored data, including `.omx/`, `.claude/`, `tools/`, `images/`, local Python diagnostics, root JSON backups, `issue.md`, PCB markup/images, and unrelated local changes. The untracked `scripts/patch_firmware_v3.py` is an active firmware tool: move it with the host-side patch builders and preserve its contents. Preserve the in-progress tracked edits to `docs/PER-KEY-RGB.md` and `tests/test_signalrgb_v3.mjs` while relocating/updating them.
+- Preserve pre-existing untracked/ignored data, including `.omx/`, `.claude/`, `tools/`, `images/`, local Python diagnostics, root JSON backups, `issue.md`, PCB markup/images, and unrelated local changes. The untracked `scripts/patch_firmware_v3.py` is a firmware patch builder: move it into `firmware/tools/patching/` and preserve its contents. Preserve the in-progress tracked edits to `docs/PER-KEY-RGB.md` and `tests/test_signalrgb_v3.mjs` while relocating/updating them.
 
 ## Non-goals
 
