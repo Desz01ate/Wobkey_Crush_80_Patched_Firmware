@@ -17,6 +17,10 @@ installation, wire protocol, and verification status.
   older firmware. V3 is wired USB only; its Windows SignalRGB runtime still
   needs an application-side check.
 
+- Windows installer project: `installer/Crush80FirmwareInstaller/` includes the
+  optional per-key v1.06 firmware and both V3 plugin installers. Wireless V3
+  support remains experimental and unverified.
+
 ## The Problem
 
 The VIA SET handler at `0xDA20` stores the H byte to the internal state struct but then overwrites the RGB fields with stale cached values from global RAM instead of converting H to RGB. The result is that any color set through VIA (including SignalRGB) is ignored — the keyboard stays on whatever color was last set locally.
