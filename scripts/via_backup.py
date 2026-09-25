@@ -274,9 +274,25 @@ def cmd_restore(hid, input_path):
     layers = len(keymap)
     print(f"  Keymap: {layers} layers, {len(keymap[0])} keys each")
 
-    # Write keycodes one at a time via set_keycode (0x05)
-    # Skip 0xFFFF (transparent/ROM default) and 0x0000 (KC_NO) — already
-    # correct after a fresh flash. Only write actual custom keycodes.
+    # Read first, then restore only changed entries, including KC_NO/0xFFFF.
+    # A firmware update can reset an intentionally disabled key to a keycode.
+    current_layers = []
+    for layer_idx, layer_data in enumerate(keymap):
+        current = bytearray()
+        layer_size = len(layer_data) * 2
+        for offset in range(0, layer_size, 28):
+            chunk = hid.get_buffer(layer_idx * layer_size + offset,
+                                   min(28, layer_size - offset))
+            if chunk is None:
+                print(f"  ERROR: Could not read layer {layer_idx} before restoring.")
+                return False
+            current.extend(chunk)
+        current_layers.append([
+            int.from_bytes(current[i:i+2], 'big')
+            for i in range(0, layer_size, 2)
+        ])
+
+    # Write changed keycodes one at a time via set_keycode (0x05).
     total = sum(len(layer) for layer in keymap)
     count = 0
     written = 0
@@ -284,8 +300,8 @@ def cmd_restore(hid, input_path):
     for layer_idx, layer_data in enumerate(keymap):
         for key_idx, kc in enumerate(layer_data):
             count += 1
-            if kc == 0xFFFF or kc == 0x0000:
-                continue  # already default after flash
+            if current_layers[layer_idx][key_idx] == kc:
+                continue
             row = key_idx // MATRIX_COLS
             col = key_idx % MATRIX_COLS
             ok = hid.set_keycode(layer_idx, row, col, kc)
@@ -297,14 +313,11 @@ def cmd_restore(hid, input_path):
             sys.stdout.flush()
             time.sleep(0.05)  # 50ms between writes
 
-        # Save after each layer
-        hid.transact([0x09])
-        time.sleep(0.2)
 
     if failed:
         print(f"\r  Writing keymap... done ({written} written, {failed} failures!)")
     else:
-        print(f"\r  Writing keymap... done ({written} keys written, {total - written} skipped default)")
+        print(f"\r  Writing keymap... done ({written} keys written, {total - written} unchanged)")
 
     # Restore RGB settings
     if "rgb" in config:
@@ -316,9 +329,28 @@ def cmd_restore(hid, input_path):
                     break
             if value_id is not None:
                 ok = hid.set_custom(CUSTOM_CHANNEL, value_id, values)
+                if not ok:
+                    failed += 1
                 print(f"  RGB {name}: {'restored' if ok else 'FAILED'}")
 
-    print("\nRestore complete!")
+    if not failed:
+        response = hid.transact([0x09])
+        if not response or response[0] != 0x09:
+            print("  ERROR: Configuration SAVE was not acknowledged.")
+            return False
+        time.sleep(0.2)
+
+    # Verify complete keymaps; an ACK alone does not prove a successful restore.
+    for layer_idx, layer_data in enumerate(keymap):
+        expected = b''.join(kc.to_bytes(2, 'big') for kc in layer_data)
+        for offset in range(0, len(expected), 28):
+            size = min(28, len(expected) - offset)
+            actual = hid.get_buffer(layer_idx * len(expected) + offset, size)
+            if actual != expected[offset:offset+size]:
+                print(f"  ERROR: Keymap verification failed at layer {layer_idx}, byte {offset}.")
+                return False
+
+    print("\nRestore complete; all keymap bytes verified." if not failed else "\nRestore failed.")
     return failed == 0
 
 
@@ -365,7 +397,8 @@ def main():
             if not os.path.exists(args.file):
                 print(f"ERROR: File not found: {args.file}")
                 sys.exit(1)
-            cmd_restore(hid, args.file)
+            if not cmd_restore(hid, args.file):
+                sys.exit(1)
     finally:
         hid.close()
 
