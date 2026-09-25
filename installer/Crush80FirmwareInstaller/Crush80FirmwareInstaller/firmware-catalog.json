@@ -34,6 +34,16 @@
       "description": "Legacy patched release for restoring the original 1.04 firmware while retaining the VIA hue fix.",
       "sha256": "54b7acd0f4a52692a9da38be8d769f09194bcc44d73490fdcd9675051476c279",
       "recommended": false
+    },
+    {
+      "id": "crush80-v106-per-key-rgb",
+      "targetId": "crush80-wired",
+      "name": "Per-key RGB firmware",
+      "version": "1.06 Per-Key",
+      "file": "firmware/firmware_per_key_v2.bin",
+      "description": "Optional wired per-key RGB firmware based on v1.06. Use with the V3 SignalRGB plugins; firmware RGB changes are volatile.",
+      "sha256": "f7c1a736b8172db26ba07f6eba2b094b607e8067c91e2f1807eba767e630a7cc",
+      "recommended": false
     }
   ],
   "plugins": [
@@ -79,6 +89,28 @@
       "destinationFile": "WobkeyCrush80Wireless.js",
       "description": "Legacy wireless plugin for 2.4G dongle. Sets keyboard to solid-colour static effect mode and syncs averaged canvas color.",
       "sha256": "a3cbaca3f981deffea2b9ecbdff5b8c58adafc85da369a914dd7f7a1722bd377",
+      "recommended": false
+    },
+    {
+      "id": "crush80-wired-v3-per-key",
+      "name": "Wobkey Crush 80 (Wired) V3 Per-Key",
+      "version": "3.0",
+      "targetMode": "Wired USB (PID 0x5055)",
+      "file": "SignalRGB/WobkeyCrush80_v3.js",
+      "destinationFile": "WobkeyCrush80_v3.js",
+      "description": "Per-key RGB plugin for per-key firmware. Remove older wired Crush 80 custom plugins before installing.",
+      "sha256": "001be238b5e919bfbbf255b9632c7fce8e9ea87b9f965f60b9c5a9cc7e020ddc",
+      "recommended": false
+    },
+    {
+      "id": "crush80-wireless-v3-per-key",
+      "name": "Wobkey Crush 80 (Wireless) V3 Per-Key",
+      "version": "3.0",
+      "targetMode": "2.4G Wireless Dongle (PID 0x5088)",
+      "file": "SignalRGB/WobkeyCrush80Wireless_v3.js",
+      "destinationFile": "WobkeyCrush80Wireless_v3.js",
+      "description": "Experimental per-key plugin for the 2.4G dongle; wireless forwarding, performance, and sleep/wake behavior are unverified. Requires per-key firmware on the keyboard; do not flash firmware onto the dongle.",
+      "sha256": "082656810a81b4b16736b8a7e3bd6d4ca9810f856888313a59aa362ed6286914",
       "recommended": false
     }
   ]

@@ -22,6 +22,9 @@
         <None Include="..\..\..\SignalRGB\WobkeyCrush80_v2.js" Link="SignalRGB\WobkeyCrush80_v2.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
         <None Include="..\..\..\SignalRGB\WobkeyCrush80Wireless.js" Link="SignalRGB\WobkeyCrush80Wireless.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
         <None Include="..\..\..\SignalRGB\WobkeyCrush80Wireless_v2.js" Link="SignalRGB\WobkeyCrush80Wireless_v2.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+        <None Include="..\..\..\firmware\firmware_per_key_v2.bin" Link="firmware\firmware_per_key_v2.bin" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+        <None Include="..\..\..\SignalRGB\WobkeyCrush80_v3.js" Link="SignalRGB\WobkeyCrush80_v3.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+        <None Include="..\..\..\SignalRGB\WobkeyCrush80Wireless_v3.js" Link="SignalRGB\WobkeyCrush80Wireless_v3.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     </ItemGroup>
 
 </Project>
