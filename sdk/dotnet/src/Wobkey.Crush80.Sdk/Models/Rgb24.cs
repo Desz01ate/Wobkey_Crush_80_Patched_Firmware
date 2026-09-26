@@ -1,4 +1,4 @@
-namespace Wobkey.Crush80;
+namespace Wobkey.Crush80.Sdk.Models;
 
 /// <summary>A 24-bit RGB color with one byte per channel.</summary>
 /// <param name="Red">The red channel.</param>

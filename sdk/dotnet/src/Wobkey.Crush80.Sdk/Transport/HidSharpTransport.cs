@@ -1,7 +1,9 @@
-using HidSharp.Reports;
 using HidSharp;
+using HidSharp.Reports;
+using Wobkey.Crush80.Sdk.Exceptions;
+using Wobkey.Crush80.Sdk.Models;
 
-namespace Wobkey.Crush80.Transport;
+namespace Wobkey.Crush80.Sdk.Transport;
 
 /// <summary>Adapts HidSharp reports to canonical 32-byte VIA payloads.</summary>
 internal sealed class HidSharpTransport : IHidTransport

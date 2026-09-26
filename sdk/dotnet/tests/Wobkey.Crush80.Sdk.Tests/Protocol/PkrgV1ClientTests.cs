@@ -1,4 +1,6 @@
-using Wobkey.Crush80.Protocol;
+using Wobkey.Crush80.Sdk.Exceptions;
+using Wobkey.Crush80.Sdk.Models;
+using Wobkey.Crush80.Sdk.Protocol;
 using Wobkey.Crush80.Sdk.Tests.Support;
 
 namespace Wobkey.Crush80.Sdk.Tests.Protocol;

@@ -1,4 +1,5 @@
 using Wobkey.Crush80;
+using Wobkey.Crush80.Sdk.Models;
 
 namespace Wobkey.Crush80.Sdk.Tests.Models;
 

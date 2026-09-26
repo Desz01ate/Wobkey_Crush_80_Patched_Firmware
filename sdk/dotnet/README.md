@@ -1,6 +1,7 @@
 # Wobkey Crush 80 .NET SDK
 
 `Wobkey.Crush80.Sdk` targets .NET 10 applications controlling the **wired** Crush 80 per-key RGB firmware. It is not a firmware installer. Build/CI coverage on Windows, Linux, and macOS is hardware-free. The Windows wired PKRG v2 common-subset path is hardware-verified as recorded below; Linux and macOS SDK hardware paths remain implementation targets requiring separate authorized smoke runs. The [Python per-key guide](https://github.com/Desz01ate/Wobkey_Crush_80_Patched_Firmware/blob/main/docs/user/PER-KEY-RGB.md) describes separate physical-keyboard evidence for the Linux Python client, not this SDK.
+For sparse-grid, per-key editing, see the [Crush80 grid adapter](adapters/Wobkey.Crush80.Adapter/README.md); opening it acquires exclusive control and immediately writes black, so it is not read-only.
 
 ## Requirements and discovery
 

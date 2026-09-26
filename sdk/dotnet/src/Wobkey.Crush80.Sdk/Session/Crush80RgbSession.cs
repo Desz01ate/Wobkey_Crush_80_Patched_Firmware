@@ -1,7 +1,9 @@
-using Wobkey.Crush80.Protocol;
-using Wobkey.Crush80.Transport;
+using Wobkey.Crush80.Sdk.Exceptions;
+using Wobkey.Crush80.Sdk.Models;
+using Wobkey.Crush80.Sdk.Protocol;
+using Wobkey.Crush80.Sdk.Transport;
 
-namespace Wobkey.Crush80;
+namespace Wobkey.Crush80.Sdk.Session;
 
 /// <summary>Owns an exclusively serialized request stream to one compatible Crush 80 RGB device.</summary>
 public sealed class Crush80RgbSession : IAsyncDisposable

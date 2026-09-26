@@ -1,4 +1,4 @@
-namespace Wobkey.Crush80.Transport;
+namespace Wobkey.Crush80.Sdk.Transport;
 
 internal static class HidReportFraming
 {

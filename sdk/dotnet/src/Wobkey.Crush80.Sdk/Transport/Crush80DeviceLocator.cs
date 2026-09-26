@@ -1,7 +1,9 @@
-using HidSharp.Reports;
 using HidSharp;
+using HidSharp.Reports;
+using Wobkey.Crush80.Sdk.Exceptions;
+using Wobkey.Crush80.Sdk.Models;
 
-namespace Wobkey.Crush80.Transport;
+namespace Wobkey.Crush80.Sdk.Transport;
 
 /// <summary>Discovers wired Crush 80 VIA HID interfaces on the current machine.</summary>
 public static class Crush80DeviceLocator

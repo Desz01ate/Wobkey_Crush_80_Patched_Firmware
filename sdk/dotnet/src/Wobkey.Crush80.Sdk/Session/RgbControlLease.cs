@@ -1,6 +1,7 @@
-using Wobkey.Crush80.Protocol;
+using Wobkey.Crush80.Sdk.Models;
+using Wobkey.Crush80.Sdk.Protocol;
 
-namespace Wobkey.Crush80;
+namespace Wobkey.Crush80.Sdk.Session;
 
 /// <summary>Owns exclusive RGB control until the captured device state is restored or the lease is disposed.</summary>
 public sealed class RgbControlLease : IAsyncDisposable

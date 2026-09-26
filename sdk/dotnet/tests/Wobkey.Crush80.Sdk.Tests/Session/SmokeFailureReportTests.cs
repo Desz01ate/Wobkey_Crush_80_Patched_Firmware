@@ -1,4 +1,5 @@
 using Wobkey.Crush80.Sample;
+using Wobkey.Crush80.Sdk.Exceptions;
 
 namespace Wobkey.Crush80.Sdk.Tests.Session;
 

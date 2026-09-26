@@ -1,5 +1,6 @@
 using System.Text.Json;
-using Wobkey.Crush80.Protocol;
+using Wobkey.Crush80.Sdk.Models;
+using Wobkey.Crush80.Sdk.Protocol;
 
 namespace Wobkey.Crush80.Sdk.Tests.Protocol;
 

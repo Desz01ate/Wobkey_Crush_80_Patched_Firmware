@@ -1,4 +1,4 @@
-using Wobkey.Crush80.Transport;
+using Wobkey.Crush80.Sdk.Transport;
 
 namespace Wobkey.Crush80.Sdk.Tests.Transport;
 

@@ -1,6 +1,6 @@
-using Wobkey.Crush80.Protocol;
+using Wobkey.Crush80.Sdk.Models;
 
-namespace Wobkey.Crush80;
+namespace Wobkey.Crush80.Sdk.Session;
 
 /// <summary>Direct diagnostic and device-level RGB operations on a negotiated session.</summary>
 public sealed class Crush80RgbAdvanced

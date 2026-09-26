@@ -1,4 +1,4 @@
-namespace Wobkey.Crush80;
+namespace Wobkey.Crush80.Sdk.Models;
 
 /// <summary>Configures a temporary RGB control lease.</summary>
 public sealed record RgbControlOptions

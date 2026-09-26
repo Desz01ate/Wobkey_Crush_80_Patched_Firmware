@@ -5,7 +5,7 @@
  *
  * LED indices: v1.06 matrix table at 0x1BC74. Geometry is an ANSI TKL layout;
  * alternate Enter/Space emitters share their physical key's canvas region.
- * Esc=0, F1=1, Caps Lock=52 were physically confirmed. See `docs/user/PER-KEY-RGB.md`.
+ * Esc=0, F1=1, and Caps Lock=52 were initially physically confirmed; subsequent hardware traversal visually verified the mapped key assignments and order. See `docs/user/PER-KEY-RGB.md`.
  */
 export function Name() { return "Wobkey Crush 80 (Wired) V3 Per-Key"; }
 export function VendorId() { return 0x320F; }
