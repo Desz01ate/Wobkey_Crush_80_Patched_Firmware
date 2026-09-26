@@ -26,6 +26,8 @@ publish/
 /.claude/
 /.omx/
 /tools/
+/images/
+/temp/
 
 # Local VIA/device backups; do not publish personal keyboard configuration
 /custom.json

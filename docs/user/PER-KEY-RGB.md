@@ -11,8 +11,10 @@ confirmed **Esc green and F1 blue** on 2026-09-25.
 
 All 92 supplied RGB slots were written and read back through the real device;
 the Esc/F1 check proves that host-supplied values reach the physical LEDs.
-Streaming performance, complete physical key mapping, and wireless operation
-remain unverified. Per-key data is volatile, not persisted across power cycles.
+Baseline Windows streaming was measured at about 14 FPS; see the wired batching
+section below. Optimized hardware throughput, complete physical key mapping,
+and wireless operation remain unverified. Per-key data is volatile, not
+persisted across power cycles.
 
 ## Verified device and baseline
 
@@ -507,16 +509,78 @@ working per-key image selected when using V3.
 - Uses effect 6 and hardware brightness 9 while streaming. SignalRGB already
   applies its brightness setting to sampled colors, so V3 does not apply it
   a second time.
-- Sends only changed eight-slot chunks, including the final four-slot chunk,
-  and checks every acknowledgement. It does not cache a failed write as sent.
+- Sends only changed eight-slot chunks, including the final four-slot chunk.
+  Wired V3 batches at most one frame (12 reports), then checks each reply's
+  status, start/count, and RGB data. The cache advances only after every
+  acknowledgement in that frame has passed; no unacknowledged frame is cached.
 - On graceful shutdown or streaming disable, restores the captured RGB array,
-  enable state, effect, and brightness. A transport error stops streaming and
-  attempts restoration; unplugged hardware cannot be restored until reachable.
+  enable state, effect, and brightness using sequential acknowledged commands.
+  A transport error stops streaming and drains outstanding replies before
+  attempting restoration. If a reply remains unavailable, restoration is
+  deferred rather than allowing a late RGB reply to acknowledge a MODE command.
+  Unplugged hardware cannot be restored until reachable.
 - Does not send SAVE, OTA, wireless-control, or reset commands.
 
 Do not run VIA, the Python RGB tool, or another RGB controller against the
 same interface while SignalRGB is streaming. Transport errors are reported
 in the device console; fix the conflict and toggle streaming to reinitialize.
+
+### Wired batching and the 30 FPS target
+
+The user verified the original wired plugin on Windows. The supplied SignalRGB
+Inspector screenshot records about **14 FPS**, **35 ms frame work** (including
+device I/O), and **32 ms inter-frame delay**. These agree with roughly
+`1000 / (35 + 32) = 15 FPS`. They do not measure the MCU's physical LED refresh.
+
+The wired plugin now sends all changed chunks before reading their replies,
+instead of waiting for a reply after every write. It retains the existing
+`PKRG` version-1 protocol, 32-byte reports, 100 ms response timeout, startup
+snapshot, and shutdown restoration. **No firmware update is required.** The
+wireless plugin remains sequential; this optimization is wired-only.
+
+The safety boundary is one frame, not an unbounded stream. The OEM wired VIA
+continuation at `0xD944` calls the endpoint writer at `0xCA78`, which returns
+busy without overwriting the IN FIFO; the caller waits for it to become free.
+Execution of the shipped instructions confirmed that an occupied FIFO received
+no stores until released. Windows' HID class driver independently queues input
+reports in a [32-report buffer by default](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/troubleshooting-hid-reports#dropped-hid-reports);
+the plugin consumes its maximum 12 replies before another frame starts.
+This is not proof of sustained throughput in the user's SignalRGB installation.
+
+To measure on Windows:
+
+1. Replace only `WobkeyCrush80_v3.js` in the custom Plugins directory, then
+   restart SignalRGB. Keep the verified per-key firmware installed.
+2. Use the same animated effect and layout as the baseline. Static colors
+   skip writes and are not a full-frame throughput benchmark.
+3. Enable **Log frame timing (diagnostic)** in the device's settings. Every
+   120 successful Render calls, the device console reports average
+   `chunks/frame`, `prepare`, `write`, `ack`, `work`, and `gap`.
+   `prepare` is canvas sampling; `write` includes change detection, packing,
+   and HID writes; `ack` includes reply checks and cache updates. Times use
+   JavaScript's millisecond clock and are averaged, not microsecond profiling.
+4. Run for at least 60 seconds. Capture the Inspector's FPS/frame-time/delay
+   graphs and several `Wobkey V3 timing:` console lines. A fully changing
+   effect should report approximately 12 chunks per frame. Check for flicker,
+   transport errors, normal typing, and restoration when streaming is disabled.
+5. Turn timing diagnostics off after measurement; they are off by default.
+
+**30 FPS is a target, not a verified result.** A frame needs at most 33.3 ms
+including the host's waiting. This patch does not override SignalRGB's
+scheduler: its public API and official plugin examples did not establish a
+supported override. If work becomes 14 ms but the delay remains 32 ms, that is
+about 22 FPS, not 30; the measured split determines the next step. Do not reduce
+the read timeout or discard acknowledgements to improve the displayed number.
+
+Offline checks exercised the actual plugin against the shipped RV32 per-key
+handler and effect-6 renderer for three distinct frames: all 92 raw RGB slots
+and all brightness-scaled framebuffer bytes matched. An unchanged frame sent
+zero packets, and shutdown restored the prior RGB/mode/OEM settings. Host USB
+queues and OEM setting calls were modeled; no physical keyboard was connected.
+A separate deterministic latency model (1 ms per write, reply ready 2 ms later)
+went from 36 ms to 14 ms per full frame. **Those are synthetic transport times,
+not Windows measurements or proof of 30 FPS.**
+
 
 ### Layout evidence
 
@@ -541,14 +605,15 @@ or alternate PCB layout. Underglow is outside this 92-slot renderer.
 node --experimental-vm-modules --test tests/test_signalrgb_v3.mjs
 ```
 
-Eight JavaScript regressions pass for each V3 variant: independent
-black/white/RGB rendering, incompatible-firmware rejection without writes,
-restoration of prior OEM and per-key states, changed-chunk behavior, error
-recovery, functional key bindings/endpoint selection, transport identity,
-and missing capability replies. Node emits its expected experimental-VM warning.
+JavaScript regressions cover independent black/white/RGB rendering,
+incompatible-firmware rejection without writes, restoration of prior OEM and
+per-key states, changed-chunk behavior, functional key bindings/endpoint
+selection, and missing or malformed replies. Wired-specific cases cover queued
+failure responses, late/unavailable acknowledgements, and failed writes during
+a frame. Node emits its expected experimental-VM warning.
 
-The unchanged V3 JavaScript was also executed through a temporary native-HID
-bridge against the connected keyboard:
+Before batching was introduced, the original V3 JavaScript was also executed
+through a temporary native-HID bridge against the connected keyboard:
 
 - Three distinct canvas frames each produced correct readback for all 92
   supplied RGB values, using 12 RGB packets per changed full frame.
@@ -559,9 +624,9 @@ bridge against the connected keyboard:
   lifecycle checks.
 
 **The Windows SignalRGB application itself was not run in this environment.**
-The user subsequently reported that wired V3 works flawlessly. This is a
-user-confirmed application result, separate from the automated native-HID
-bridge checks; no sustained frame-rate measurement was recorded.
+The user subsequently confirmed wired V3 operation on Windows and supplied
+the baseline metrics summarized above. Those observations apply to the
+original sequential plugin; the batched plugin still needs Windows validation.
 
 Primary API references:
 

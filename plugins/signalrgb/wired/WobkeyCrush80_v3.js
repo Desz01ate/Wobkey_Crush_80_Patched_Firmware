@@ -18,6 +18,10 @@ export function DeviceMessage() {
     return ["Requires the per-key v1.06 firmware; wired USB only.",
         "V3 uses individual RGB colors. Remove older wired custom plugins before installing it."];
 }
+export function ControllableParameters() {
+    return [{ property: "logFrameTiming", label: "Log frame timing (diagnostic)",
+        type: "boolean", default: false }];
+}
 export function Validate(endpoint) {
     return endpoint.interface === 1 && endpoint.usage_page === 0xFF60 && endpoint.usage === 0x61;
 }
@@ -70,19 +74,29 @@ const previousFrame = new Array(LED_COUNT * 3).fill(-1);
 const packet = new Array(33).fill(0);
 const chunkPayload = new Array(6 + CHUNK_LEDS * 3).fill(0);
 const readReport = [0x00];
+const changedStarts = new Array(Math.ceil(LED_COUNT / CHUNK_LEDS)).fill(0);
+const chunkHeader = [7, CHANNEL, 2];
+let pendingReplies = 0;
+const timing = { frames: 0, chunks: 0, prepare: 0, writes: 0, reads: 0,
+    gaps: 0, gapCount: 0, previousEnd: 0 };
 let saved = null;
 let streaming = false;
 
 // SignalRGB's HID write needs report ID zero. Its input path can return
 // either 32 payload bytes or a zero-prefixed 33-byte report; use the actual
 // read size rather than assuming padding is a received acknowledgement.
-function exchange(payload) {
+function send(payload) {
     packet.fill(0);
     for (let i = 0; i < payload.length; i++) packet[i + 1] = payload[i];
-    device.write(packet, packet.length);
+    if (device.write(packet, packet.length) === -1) throw new Error("Keyboard write failed");
+    pendingReplies++;
+}
+
+function receive(payload) {
     const raw = device.read(readReport, 33, TIMEOUT_MS);
     const size = device.getLastReadSize();
     if (size === 0) throw new Error("Keyboard response timed out");
+    pendingReplies--;
     const offset = size === 33 && raw[0] === 0 ? 1 : 0;
     if ((size !== 32 && size !== 33) || raw.length < offset + 32) {
         throw new Error("Unexpected HID response size");
@@ -95,6 +109,22 @@ function exchange(payload) {
         throw new Error(`Per-key firmware rejected the request (status ${reply[3]})`);
     }
     return reply;
+}
+
+function exchange(payload) {
+    send(payload);
+    return receive(payload);
+}
+
+function drainReplies() {
+    // A timed-out reply can still arrive later. Do not issue restoration
+    // commands while it or the rest of a failed frame is outstanding.
+    while (pendingReplies > 0) {
+        device.read(readReport, 33, TIMEOUT_MS);
+        if (device.getLastReadSize() === 0) throw new Error("Keyboard replies still outstanding");
+        pendingReplies--;
+    }
+    device.clearReadBuffer();
 }
 
 function capabilities() {
@@ -136,7 +166,7 @@ function readFrame() {
     return colors;
 }
 
-function writeChunk(colors, start, count) {
+function sendChunk(colors, start, count) {
     chunkPayload[0] = 7;
     chunkPayload[1] = CHANNEL;
     chunkPayload[2] = 2;
@@ -146,20 +176,28 @@ function writeChunk(colors, start, count) {
     for (let i = 0; i < CHUNK_LEDS * 3; i++) {
         chunkPayload[6 + i] = i < count * 3 ? colors[start * 3 + i] : 0;
     }
-    const reply = exchange(chunkPayload);
-    for (let i = 4; i < 6 + count * 3; i++) {
-        if (reply[i] !== chunkPayload[i]) throw new Error("RGB write acknowledgement mismatch");
+    send(chunkPayload);
+}
+
+function acknowledgeChunk(colors, start, count) {
+    const reply = receive(chunkHeader);
+    if (reply[4] !== start || reply[5] !== count) throw new Error("RGB acknowledgement range mismatch");
+    for (let i = 0; i < count * 3; i++) {
+        if (reply[6 + i] !== colors[start * 3 + i]) throw new Error("RGB write acknowledgement mismatch");
     }
 }
 
 function writeFrame(colors) {
     for (let start = 0; start < LED_COUNT; start += CHUNK_LEDS) {
-        writeChunk(colors, start, Math.min(CHUNK_LEDS, LED_COUNT - start));
+        const count = Math.min(CHUNK_LEDS, LED_COUNT - start);
+        sendChunk(colors, start, count);
+        acknowledgeChunk(colors, start, count);
     }
 }
 
 function restoreState() {
     if (saved === null) return;
+    drainReplies();
     setMode(0);
     writeFrame(saved.colors);
     setOEM(1, saved.brightness);
@@ -168,10 +206,37 @@ function restoreState() {
     saved = null;
 }
 
+export function onlogFrameTimingChanged() {
+    for (const key in timing) timing[key] = 0;
+}
+
+function recordTiming(start, prepared, written, finished, chunks) {
+    if (timing.previousEnd !== 0) {
+        timing.gaps += start - timing.previousEnd;
+        timing.gapCount++;
+    }
+    timing.frames++;
+    timing.chunks += chunks;
+    timing.prepare += prepared - start;
+    timing.writes += written - prepared;
+    timing.reads += finished - written;
+    timing.previousEnd = finished;
+    if (timing.frames < 120) return;
+    const frames = timing.frames;
+    const work = (timing.prepare + timing.writes + timing.reads) / frames;
+    const gap = timing.gapCount === 0 ? 0 : timing.gaps / timing.gapCount;
+    device.log(`Wobkey V3 timing: ${frames} frames; chunks/frame=${(timing.chunks / frames).toFixed(2)}; ` +
+        `prepare=${(timing.prepare / frames).toFixed(2)}ms; write=${(timing.writes / frames).toFixed(2)}ms; ` +
+        `ack=${(timing.reads / frames).toFixed(2)}ms; work=${work.toFixed(2)}ms; gap=${gap.toFixed(2)}ms`);
+    onlogFrameTimingChanged();
+}
+
 export function Initialize() {
     streaming = false;
     saved = null;
     previousFrame.fill(-1);
+    pendingReplies = 0;
+    onlogFrameTimingChanged();
     try {
         device.clearReadBuffer();
         const enabled = capabilities();
@@ -201,12 +266,19 @@ export function Initialize() {
 export function Render() {
     if (!streaming) return;
     try {
+        const measuring = logFrameTiming;
+        const started = measuring ? Date.now() : 0;
         for (let index = 0; index < LED_COUNT; index++) {
             const color = device.color(positions[index][0], positions[index][1]);
             frame[index * 3] = color[0];
             frame[index * 3 + 1] = color[1];
             frame[index * 3 + 2] = color[2];
         }
+        const prepared = measuring ? Date.now() : 0;
+        let changedCount = 0;
+        // The wired firmware waits for its IN FIFO before replying; Windows
+        // queues input reports independently of these reads. Bound the batch
+        // to one frame (12 reports), then consume and verify every reply.
         for (let start = 0; start < LED_COUNT; start += CHUNK_LEDS) {
             const count = Math.min(CHUNK_LEDS, LED_COUNT - start);
             const first = start * 3, end = (start + count) * 3;
@@ -215,10 +287,21 @@ export function Render() {
                 if (frame[i] !== previousFrame[i]) { changed = true; break; }
             }
             if (!changed) continue;
-            writeChunk(frame, start, count);
-            // Never cache an unacknowledged chunk as successfully delivered.
+            sendChunk(frame, start, count);
+            changedStarts[changedCount++] = start;
+        }
+        const written = measuring ? Date.now() : 0;
+        for (let chunk = 0; chunk < changedCount; chunk++) {
+            const start = changedStarts[chunk];
+            acknowledgeChunk(frame, start, Math.min(CHUNK_LEDS, LED_COUNT - start));
+        }
+        // Commit the cache only after the entire batch has been acknowledged.
+        for (let chunk = 0; chunk < changedCount; chunk++) {
+            const first = changedStarts[chunk] * 3;
+            const end = Math.min(first + CHUNK_LEDS * 3, frame.length);
             for (let i = first; i < end; i++) previousFrame[i] = frame[i];
         }
+        if (measuring) recordTiming(started, prepared, written, Date.now(), changedCount);
     } catch (error) {
         streaming = false;
         device.log(`Wobkey V3 streaming stopped: ${error.message}. Toggle streaming to reconnect.`);
@@ -231,7 +314,6 @@ export function Shutdown() {
     streaming = false;
     if (saved === null) return;
     try {
-        device.clearReadBuffer();
         restoreState();
     } catch (error) {
         device.log(`Wobkey V3 shutdown restore failed: ${error.message}`);

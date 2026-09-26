@@ -94,12 +94,12 @@
     {
       "id": "crush80-wired-v3-per-key",
       "name": "Wobkey Crush 80 (Wired) V3 Per-Key",
-      "version": "3.0",
+      "version": "3.1",
       "targetMode": "Wired USB (PID 0x5055)",
       "file": "SignalRGB/WobkeyCrush80_v3.js",
       "destinationFile": "WobkeyCrush80_v3.js",
-      "description": "Per-key RGB plugin for per-key firmware. Remove older wired Crush 80 custom plugins before installing.",
-      "sha256": "9377d3b9d5f3c9bbe616b276ec29695774923353eca4d7940f7894aaa1bf9ce1",
+      "description": "Per-key RGB plugin with bounded frame batching and optional timing diagnostics. Uses the existing per-key firmware; no reflash needed. Remove older wired Crush 80 custom plugins before installing.",
+      "sha256": "4869b1f759409f8d57d955f5c29561cad42876ce1a093b4558155db446810a1f",
       "recommended": false
     },
     {
