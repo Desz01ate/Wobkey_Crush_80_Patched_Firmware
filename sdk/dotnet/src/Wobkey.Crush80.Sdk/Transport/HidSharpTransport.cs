@@ -1,3 +1,4 @@
+using HidSharp.Reports;
 using HidSharp;
 
 namespace Wobkey.Crush80.Transport;
@@ -29,7 +30,8 @@ internal sealed class HidSharpTransport : IHidTransport
             device = Crush80DeviceLocator.FindByPath(descriptor.Path)
                 ?? throw new DeviceNotFoundException("Open", descriptor);
             if (device.GetMaxInputReportLength() != HidReportFraming.ReportLength ||
-                device.GetMaxOutputReportLength() != HidReportFraming.ReportLength)
+                device.GetMaxOutputReportLength() != HidReportFraming.ReportLength ||
+                !SupportsZeroIdReports(device.GetReportDescriptor()))
                 throw new IncompatibleFirmwareException(operation: "Open", device: descriptor);
 
             var configuration = new OpenConfiguration();
@@ -78,12 +80,35 @@ internal sealed class HidSharpTransport : IHidTransport
         }
     }
 
+    internal static bool SupportsZeroIdReports(ReportDescriptor descriptor)
+    {
+        if (descriptor.ReportsUseID)
+            return false;
+
+        return HasZeroIdReport(descriptor.InputReports) && HasZeroIdReport(descriptor.OutputReports);
+    }
+
+    private static bool HasZeroIdReport(IEnumerable<Report> reports)
+    {
+        var found = false;
+        foreach (var report in reports)
+        {
+            if (report.ReportID != 0 || report.Length != HidReportFraming.ReportLength)
+                return false;
+            found = true;
+        }
+
+        return found;
+    }
+
     internal static Crush80SdkException MapOpenFailure(Crush80DeviceDescriptor descriptor, Exception error) => error switch
     {
         UnauthorizedAccessException => new DeviceAccessDeniedException("Open", descriptor, error),
         FileNotFoundException or DirectoryNotFoundException => new DeviceNotFoundException("Open", descriptor, error),
-        TimeoutException => new DeviceBusyException("Open", descriptor, error),
-        IOException => new DeviceBusyException("Open", descriptor, error),
+        IOException io when IsAccessDenied(io) => new DeviceAccessDeniedException("Open", descriptor, error),
+        IOException io when io.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021) =>
+            new DeviceBusyException("Open", descriptor, error),
+        TimeoutException or IOException => new DeviceOpenException("Open", descriptor, error),
         ObjectDisposedException => new DeviceDisconnectedException("Open", descriptor, error),
         _ => throw new ArgumentException("Not an HID open failure.", nameof(error))
     };
@@ -92,10 +117,14 @@ internal sealed class HidSharpTransport : IHidTransport
     {
         UnauthorizedAccessException => new DeviceAccessDeniedException(operation, descriptor, error),
         TimeoutException => new ProtocolViolationException("The HID report transfer timed out.", operation, descriptor, error),
+        IOException io when IsAccessDenied(io) => new DeviceAccessDeniedException(operation, descriptor, error),
         IOException => new DeviceDisconnectedException(operation, descriptor, error),
         ObjectDisposedException => new DeviceDisconnectedException(operation, descriptor, error),
         _ => throw new ArgumentException("Not an HID transfer failure.", nameof(error))
     };
+
+    internal static bool IsAccessDenied(Exception error) =>
+        error is UnauthorizedAccessException || error.HResult == unchecked((int)0x80070005);
 
     public ValueTask DisposeAsync()
     {

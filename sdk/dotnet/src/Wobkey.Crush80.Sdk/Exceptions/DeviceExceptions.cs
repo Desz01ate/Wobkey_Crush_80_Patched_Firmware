@@ -39,6 +39,19 @@ public sealed class DeviceAccessDeniedException : Crush80SdkException
     }
 }
 
+/// <summary>The operating system could not open a device for an unknown reason.</summary>
+public sealed class DeviceOpenException : Crush80SdkException
+{
+    /// <summary>Initializes an exception for an unclassified device opening failure.</summary>
+    public DeviceOpenException(
+        string? operation = null,
+        Crush80DeviceDescriptor? device = null,
+        Exception? innerException = null)
+        : base("The Crush 80 device could not be opened.", operation, device, innerException)
+    {
+    }
+}
+
 /// <summary>The connected firmware does not implement the required PKRG protocol.</summary>
 public sealed class IncompatibleFirmwareException : Crush80SdkException
 {
