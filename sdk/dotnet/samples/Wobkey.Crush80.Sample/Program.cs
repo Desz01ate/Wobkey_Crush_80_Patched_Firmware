@@ -46,6 +46,12 @@ ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
     cancellation.Cancel();
 };
 Console.CancelKeyPress += cancelHandler;
+var failures = new Wobkey.Crush80.Sample.SmokeFailureReport();
+Crush80RgbSession? session = null;
+RgbControlLease? lease = null;
+var controlAcquisitionStarted = false;
+var restorationVerified = false;
+var stage = "Discovery";
 try
 {
     var frame = new Rgb24[92];
@@ -57,53 +63,55 @@ try
     if (devices.Count == 0)
         throw new DeviceNotFoundException("Smoke");
 
-    await using (var session = await Crush80RgbSession.OpenAsync(devices[0], cancellationToken: cancellation.Token))
-    {
-        var before = await session.Advanced.CaptureStateAsync(cancellation.Token);
-        Console.WriteLine($"PKRG v{session.Capabilities.ProtocolVersion}: {session.Capabilities.LedCount} LEDs, {session.Capabilities.ChunkLimit} per chunk; override initially {session.Capabilities.Enabled}.");
-        await using (var lease = await session.AcquireControlAsync(new Rgb24[92], cancellationToken: cancellation.Token))
-        {
-            await lease.WriteFrameAsync(frame, cancellation.Token);
-            await Task.Delay(TimeSpan.FromSeconds(2), cancellation.Token);
+    stage = "Open";
+    session = await Crush80RgbSession.OpenAsync(devices[0], cancellationToken: cancellation.Token);
+    stage = "Capture original state";
+    var before = await session.Advanced.CaptureStateAsync(cancellation.Token);
+    Console.WriteLine($"PKRG v{session.Capabilities.ProtocolVersion}: {session.Capabilities.LedCount} LEDs, {session.Capabilities.ChunkLimit} per chunk; override initially {session.Capabilities.Enabled}.");
 
-            var actual = new Rgb24[92];
-            await lease.ReadFrameAsync(actual, cancellation.Token);
-            if (!actual.AsSpan().SequenceEqual(frame))
-                throw new InvalidDataException("Full 92-color readback did not match the Esc/F1 pattern.");
+    // Acquisition can perform writes before returning a lease; mark it before calling.
+    stage = "Acquire control";
+    controlAcquisitionStarted = true;
+    lease = await session.AcquireControlAsync(new Rgb24[92], cancellationToken: cancellation.Token);
+    stage = "Pattern write/readback";
+    await lease.WriteFrameAsync(frame, cancellation.Token);
+    await Task.Delay(TimeSpan.FromSeconds(2), cancellation.Token);
 
-            // Restore explicitly, not just by disposing the lease on the success path.
-            await lease.RestoreAsync();
-        }
-        // Check the original state after the lease releases the session's exclusive control.
-        var restored = await session.Advanced.CaptureStateAsync(cancellation.Token);
-        if (restored.Enabled != before.Enabled || restored.Brightness != before.Brightness ||
-            restored.Effect != before.Effect || !restored.Colors.Span.SequenceEqual(before.Colors.Span))
-            throw new InvalidDataException("Mode, effect, brightness, or full 92-color snapshot differed after restoration.");
-    }
+    var actual = new Rgb24[92];
+    await lease.ReadFrameAsync(actual, cancellation.Token);
+    if (!actual.AsSpan().SequenceEqual(frame))
+        throw new InvalidDataException("Full 92-color readback did not match the Esc/F1 pattern.");
 
-    Console.WriteLine("Full 92-color pattern readback and restored mode/effect/brightness/RGB verified.");
-    return 0;
-}
-catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-{
-    Console.Error.WriteLine("Smoke canceled; automatic lease/session cleanup attempted restoration.");
-    return 130;
-}
-catch (StateRestoreException error)
-{
-    Console.Error.WriteLine($"Restoration incomplete: {error.Message}");
-    foreach (var failure in error.Failures)
-        Console.Error.WriteLine($"  {failure.Field}: {failure.Error.Message}");
-    Console.Error.WriteLine("Do not assume original lighting state was restored; reconnect/check the keyboard.");
-    return 1;
+    stage = "Explicit restore";
+    await lease.RestoreAsync();
+    // Check the original state after the lease releases the session's exclusive control.
+    stage = "Verify restoration";
+    var restored = await session.Advanced.CaptureStateAsync(cancellation.Token);
+    if (restored.Enabled != before.Enabled || restored.Brightness != before.Brightness ||
+        restored.Effect != before.Effect || !restored.Colors.Span.SequenceEqual(before.Colors.Span))
+        throw new InvalidDataException("Mode, effect, brightness, or full 92-color snapshot differed after restoration.");
+    restorationVerified = true;
 }
 catch (Exception error)
 {
-    Console.Error.WriteLine($"Smoke failed: {error}");
-    Console.Error.WriteLine("If the device disconnected, restoration cannot be guaranteed; reconnect/check the keyboard.");
-    return 1;
+    failures.Capture(stage, error);
 }
 finally
 {
+    if (lease is not null)
+        await failures.AttemptAsync("Lease cleanup", () => lease.DisposeAsync());
+    if (session is not null)
+        await failures.AttemptAsync("Session cleanup", () => session.DisposeAsync());
     Console.CancelKeyPress -= cancelHandler;
 }
+
+if (failures.Count != 0 || !restorationVerified)
+{
+    if (failures.Count == 0)
+        failures.Capture("Verification", new InvalidOperationException("Restoration verification did not complete."));
+    failures.WriteTo(Console.Error, controlAcquisitionStarted);
+    return failures.WasCanceledOnly && cancellation.IsCancellationRequested ? 130 : 1;
+}
+
+Console.WriteLine("Full 92-color pattern readback and restored mode/effect/brightness/RGB verified.");
+return 0;
