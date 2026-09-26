@@ -16,4 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Wobkey.Crush80.Sdk/Wobkey.Crush80.Sdk.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../../conformance/pkrg-v1.json" Link="pkrg-v1.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
