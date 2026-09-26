@@ -24,6 +24,8 @@ internal sealed class FakeFirmwareTransport : IHidTransport
     internal bool? RejectModeValueOnce { get; set; }
     internal string? MalformOperationOnce { get; set; }
     internal bool TimeoutNextRead { get; set; }
+    internal byte[]? NextResponse { get; set; }
+    internal ReadOnlyMemory<byte> LastRequest => _pending;
     internal bool PauseAfterWrite { get; set; }
     internal bool CancelCallerAfterNextWrite { get; set; }
     internal CancellationTokenSource? CallerCancellation { get; set; }
@@ -73,6 +75,16 @@ internal sealed class FakeFirmwareTransport : IHidTransport
             TimeoutNextRead = false;
             _hasPending = false;
             throw new TimeoutException("The simulated firmware did not respond in time.");
+        }
+
+        if (NextResponse is { } exactResponse)
+        {
+            if (exactResponse.Length != 32)
+                throw new ArgumentException("An injected VIA response must contain exactly 32 bytes.", nameof(NextResponse));
+            exactResponse.AsMemory().CopyTo(payload);
+            NextResponse = null;
+            _hasPending = false;
+            return ValueTask.CompletedTask;
         }
 
         var reply = payload.Span;
