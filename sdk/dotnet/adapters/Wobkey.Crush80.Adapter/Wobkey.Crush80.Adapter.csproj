@@ -4,6 +4,21 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <LangVersion>14.0</LangVersion>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PackageId>Wobkey.Crush80.Adapter</PackageId>
+        <Version>0.1.0</Version>
+        <Authors>Wobkey Crush 80 Community</Authors>
+        <Description>Grid adapter for the wired Wobkey Crush 80 per-key RGB firmware.</Description>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../../src/Wobkey.Crush80.Sdk/Wobkey.Crush80.Sdk.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <None Update="README.md" Pack="true" PackagePath="README.md" />
+        <None Include="../../LICENSE.txt" Pack="true" PackagePath="LICENSE.txt" />
+    </ItemGroup>
 
 </Project>
