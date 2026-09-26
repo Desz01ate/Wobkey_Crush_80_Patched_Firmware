@@ -5,7 +5,7 @@ namespace Wobkey.Crush80.Sdk.Tests.Session;
 public sealed class RestorationFailureTests
 {
     [Fact]
-    public async Task RejectedDisableAndColorWriteAggregateAndContinueSafeSteps()
+    public async Task RejectedDisableAndColorsDoNotEnablePartialSavedFrame()
     {
         await using var transport = new FakeFirmwareTransport { Enabled = true, Brightness = 4, Effect = 7 };
         await using var session = await Crush80RgbSession.OpenAsync(transport);
@@ -20,7 +20,7 @@ public sealed class RestorationFailureTests
         Assert.All(error.Failures, failure => Assert.IsType<FirmwareRejectedRequestException>(failure.Error));
         Assert.Contains("SetBrightness:4", transport.DetailedOperations);
         Assert.Contains("SetEffect:7", transport.DetailedOperations);
-        Assert.Contains("SetEnabled:true", transport.DetailedOperations);
+        Assert.DoesNotContain("SetEnabled:true", transport.DetailedOperations);
     }
 
     [Theory]
@@ -99,6 +99,26 @@ public sealed class RestorationFailureTests
 
         await session.DisposeAsync();
 
+        Assert.Empty(transport.Operations);
+        Assert.True(transport.IsDisposed);
+    }
+
+    [Fact]
+    public async Task FaultedSessionAllowsOptedOutLeaseToReleaseOwnershipWithoutWrites()
+    {
+        await using var transport = new FakeFirmwareTransport();
+        var session = await Crush80RgbSession.OpenAsync(transport);
+        var lease = await session.AcquireControlAsync(new Rgb24[92],
+            new RgbControlOptions { RestoreStateOnDispose = false });
+        transport.TimeoutNextRead = true;
+        await Assert.ThrowsAsync<ProtocolViolationException>(async () => await session.Advanced.GetEnabledAsync());
+        transport.Operations.Clear();
+
+        await lease.DisposeAsync();
+
+        Assert.Empty(transport.Operations);
+        Assert.Throws<ObjectDisposedException>(() => _ = lease.Enabled);
+        await session.DisposeAsync();
         Assert.Empty(transport.Operations);
         Assert.True(transport.IsDisposed);
     }

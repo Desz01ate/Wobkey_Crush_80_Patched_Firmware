@@ -85,7 +85,7 @@ public sealed class Crush80RgbSession : IAsyncDisposable
                 await RestoreStateCoreAsync(client, lease.SavedState, token, lease).ConfigureAwait(false);
             _activeLease = null;
             lease.MarkRestored();
-        }, CancellationToken.None, expectedLease: lease, allowFaulted: restore);
+        }, CancellationToken.None, expectedLease: lease, allowFaulted: true);
 
     private static readonly string[] RestorationFields =
         ["OverrideDisable", "Colors", "Brightness", "Effect", "OverrideEnable"];
@@ -94,7 +94,6 @@ public sealed class Crush80RgbSession : IAsyncDisposable
         PkrgV1Client client, RgbDeviceState state, CancellationToken token, RgbControlLease? lease = null)
     {
         List<StateRestoreFailure>? failures = null;
-        var disabled = false;
         var colorsRestored = false;
         for (var step = 0; step < RestorationFields.Length; step++)
         {
@@ -111,7 +110,6 @@ public sealed class Crush80RgbSession : IAsyncDisposable
                 {
                     case 0:
                         await client.SetEnabledAsync(false, token).ConfigureAwait(false);
-                        disabled = true;
                         lease?.MarkEnabled(false);
                         break;
                     case 1:
@@ -124,8 +122,8 @@ public sealed class Crush80RgbSession : IAsyncDisposable
                     case 3:
                         await client.SetEffectAsync(state.Effect, token).ConfigureAwait(false);
                         break;
-                    case 4 when disabled && !colorsRestored && state.Enabled:
-                        // Do not turn on an incompletely restored frame after a successful disable.
+                    case 4 when !colorsRestored && state.Enabled:
+                        // Do not enable the override over an incompletely restored frame.
                         break;
                     case 4:
                         await client.SetEnabledAsync(state.Enabled, token).ConfigureAwait(false);
