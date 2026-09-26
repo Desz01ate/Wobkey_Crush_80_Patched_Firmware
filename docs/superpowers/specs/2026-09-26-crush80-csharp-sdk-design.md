@@ -426,15 +426,15 @@ Applicable vectors are executed against the existing patched-firmware machine-co
 Before claiming support for an OS, exercise a real keyboard on that OS:
 
 1. Discover and open the VIA interface.
-2. Negotiate `PKRG` version 1 capabilities.
+2. Negotiate supported `PKRG` v1 or optimized v2 capabilities.
 3. Capture the current complete state.
 4. Display and visually confirm a known Esc/F1 pattern.
-5. Submit a changing full frame.
+5. Submit a changing full frame using the implemented sequential operation-2 path.
 6. Read back all 92 supplied RGB values.
 7. Restore the prior RGB, override state, effect, and brightness.
 8. Read back and confirm the restored state.
 
-Hardware smoke evidence is recorded per OS. Passing platform-neutral tests alone is not a support claim.
+Record evidence per OS, including SDK commit, OS, .NET runtime, HidSharp version, firmware-reported CRC (query separately; the SDK sample does not read firmware metadata), PKRG capability response, Esc/F1 visual observation, all-92 readback result, and restored mode/effect/brightness/RGB verification. A readback match is not visual confirmation or proof of restoration. Passing platform-neutral tests alone is not a support claim; every OS claim requires its own authorized physical-device run.
 
 ## Documentation requirements
 
@@ -470,4 +470,6 @@ The original v1-only handshake decision above describes the initial SDK design. 
 
 The SDK now accepts **only** exact v1 or exact optimized v2 capability formats; v2 additionally requires streaming metadata 9/11. The four-argument `PerKeyRgbCapabilities` constructor is unchanged. Nullable init properties report the stream LED/fragment capacities; `SupportsFrameStreaming` describes firmware support, not SDK usage. Both versions continue to use the existing sequential, acknowledged eight-LED operation-2 reads/writes, capture, and restoration. The SDK does **not** send streaming operations 3/4 or promise atomic frames; a future v2 internal strategy and host-rendered effects remain separate future capabilities.
 
-This change has offline codec, conformance-corpus, and injected-session coverage. The v1 firmware conformance cases remain v1; the v2 capability response is separately recorded. The Windows capability handshake alone does **not** validate sample lighting writes, visual output, or restoration on the device. A new explicitly authorized Windows hardware smoke run is required before claiming verified Windows SDK hardware support.
+**Recorded Windows v2 hardware smoke — 2026-09-26:** On a Windows host, SDK commit `501b802` was tested with optimized PKRG v2 firmware. Capability output was `PKRG v2: 92 LEDs, 8 per chunk; override initially False.` Sample output was `Full 92-color pattern readback and restored mode/effect/brightness/RGB verified.` The user physically confirmed Esc red and F1 green during the two-second pattern. This verifies the Windows wired PKRG v2 common-subset SDK path: capability negotiation, sequential operation-2 writes, full 92-color readback, physical Esc/F1 output, and restoration. No firmware CRC evidence was supplied in this run.
+
+Linux and macOS SDK hardware paths remain implementation targets requiring separate authorized smoke runs. V2 atomic streaming operations 3/4 remain unimplemented and unverified in the SDK.
