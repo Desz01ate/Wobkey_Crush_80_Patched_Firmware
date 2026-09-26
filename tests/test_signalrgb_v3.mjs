@@ -6,7 +6,8 @@ import vm from 'node:vm';
 import test from 'node:test';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const pluginPath = process.env.SIGNALRGB_TEST_PLUGIN || path.join(root, 'SignalRGB/WobkeyCrush80_v3.js');
+const pluginPath = process.env.SIGNALRGB_TEST_PLUGIN || path.join(root, 'plugins/signalrgb/wired/WobkeyCrush80_v3.js');
+const expectedProductId = path.basename(pluginPath).includes('Wireless') ? 0x5088 : 0x5055;
 
 // Stateful USB endpoint model: assertions concern rendered colors, ownership,
 // and restored state, not the presence of a mock or copies of request headers.
@@ -185,4 +186,24 @@ test('firmware LED indices retain their functional keypress bindings', async () 
   assert.equal(plugin.Validate({interface: 1, usage_page: 0xFF60, usage: 0x61}), true);
   assert.equal(plugin.Validate({interface: 3, usage_page: 0xFF1C, usage: 0x61}), false);
   assert.equal(plugin.Validate({interface: 2, usage_page: 0xFFEF, usage: 0x61}), false);
+});
+
+test('device selection uses the intended USB transport identity', async () => {
+  const plugin = await loadPlugin(new Keyboard());
+  assert.equal(plugin.VendorId(), 0x320F);
+  assert.equal(plugin.ProductId(), expectedProductId);
+  assert.equal(plugin.Validate({interface: 0, usage_page: 0x0001, usage: 0x06}), false);
+});
+
+test('a missing capability reply leaves the keyboard unchanged', async () => {
+  const keyboard = new Keyboard();
+  keyboard.device.read = () => { keyboard.lastRead = 0; return []; };
+  const before = keyboard.snapshot();
+  const plugin = await loadPlugin(keyboard);
+  plugin.Initialize();
+  plugin.Render();
+  plugin.Shutdown(false);
+  assert.deepEqual(keyboard.snapshot(), before);
+  assert.equal(keyboard.writes, 0);
+  assert.ok(keyboard.logs.some(message => /timed out/i.test(message)));
 });

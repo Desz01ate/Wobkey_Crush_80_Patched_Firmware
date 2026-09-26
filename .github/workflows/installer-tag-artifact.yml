@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PROJECT: installer/Crush80FirmwareInstaller/Crush80FirmwareInstaller/Crush80FirmwareInstaller.csproj
+  PROJECT: host/windows/Crush80FirmwareInstaller/Crush80FirmwareInstaller.csproj
   PUBLISH_DIR: artifacts/Crush80FirmwareInstaller-win-x64
 
 jobs:

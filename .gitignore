@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# .NET and Visual Studio
+**/bin/
+**/obj/
+.vs/
+*.rsuser
+*.sln.docstates
+*.log
+*.tmp
+*.nupkg
+TestResults/
+publish/
+*.suo
+*.pdb
+*.cache
+
+# Build output
+/artifacts/
+
+# Local developer state and downloaded toolchain
+/.claude/
+/.omx/
+/tools/
+
+# Local VIA/device backups; do not publish personal keyboard configuration
+/custom.json
+/restore_via_pyscript.json
+
+# Additional Visual Studio/NuGet output
+*.user
+*.userosscache
+*.userprefs
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+BuildLog.*
+*.tlog
+*.vspscc
+*.vssscc
+*.tmp_proj
+*.cachefile
+*.ilk
+*.sbr
+*.tlb
+*.snupkg
+**/packages/*
+!**/packages/build/

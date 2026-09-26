@@ -5,19 +5,18 @@ The Wobkey Crush 80 (VID `0x320F`, PID `0x5055`) ships with a firmware bug: sett
 ## Per-key RGB (v1.06)
 
 The per-key patch, Linux host tool, and wired SignalRGB V3 plugin are documented
-in [docs/PER-KEY-RGB.md](docs/PER-KEY-RGB.md), including hardware findings,
+in [docs/user/PER-KEY-RGB.md](docs/user/PER-KEY-RGB.md), including hardware findings,
 installation, wire protocol, and verification status.
 
-- Build: `python scripts/patch_firmware_per_key.py`
-- Control: `python scripts/per_key_rgb.py --help`
-- SignalRGB per-key: `SignalRGB/WobkeyCrush80_v3.js` — requires the per-key
+- Build: `python3 firmware/tools/patching/patch_firmware_per_key.py`
+- Control: `python3 host/linux/per_key_rgb.py --help`
+- SignalRGB per-key: `plugins/signalrgb/wired/WobkeyCrush80_v3.js` — requires the per-key
   firmware; copy it into SignalRGB's custom Plugins folder and remove older
   wired custom plugins for this device before restarting SignalRGB.
-- V1/V2 plugins described below remain whole-board color controllers for
-  older firmware. V3 is wired USB only; its Windows SignalRGB runtime still
-  needs an application-side check.
+- V1/V2 plugins remain whole-board color controllers for hue-patched firmware.
+  Wired V3 is the per-key plugin; wireless V3 is experimental and unverified.
 
-- Windows installer project: `installer/Crush80FirmwareInstaller/` includes the
+- Windows installer project: `host/windows/Crush80FirmwareInstaller/` includes the
   optional per-key v1.06 firmware and both V3 plugin installers. Wireless V3
   support remains experimental and unverified.
 
@@ -28,28 +27,34 @@ The VIA SET handler at `0xDA20` stores the H byte to the internal state struct b
 ## Repository Structure
 
 ```
+docs/user/                User-facing installation and per-key guide
 firmware/
-  firmware.bin              Stock firmware
-  firmware_patched.bin      Patched firmware (ready to flash)
-  code_2M.bin               Stock OTA image
-  code_2M_patched.bin       Full OTA image with patch applied
-  Crush80-RGB-Firmware.exe  Stock OTA flasher (.NET, Windows)
-  Crush80-RGB-USB.JSON      VIA keymap definition
-  99-wobkey-crush80.rules   Linux udev rule for hidraw access
+  sources/                Stock firmware, OTA image, and OTA parameters
+  vendor/                 Original Windows updater executables
+  releases/               Versioned patched firmware and OTA images
+  tools/patching/         Reproducible firmware patch builders
 
-scripts/
-  patch_firmware.py         Generates the patched firmware
-  flash_ota.py              Cross-platform OTA flasher (Linux)
-  extract_firmware.py       Extracts firmware from the .NET flasher
-  extract_fw_code.py        Extracts code section from firmware
-  analyze_firmware.py       Firmware analysis utilities
-  disasm_targets.py         Disassembly helper
-  disasm_via.py             VIA handler disassembler
-  ghidra_analyze.py         Ghidra analysis script
+host/
+  linux/                  OTA, VIA backup, and per-key RGB utilities
+  windows/Crush80FirmwareInstaller/
+                          Windows WPF firmware installer
 
-SignalRGB/
-  WobkeyCrush80.js          SignalRGB plugin
-  via-test.html             Browser-based WebHID test tool
+plugins/signalrgb/
+  wired/                  Wired keyboard plugin variants
+  wireless/               2.4 GHz dongle plugin variants
+plugins/tools/via-test.html
+                          Browser-based WebHID test tool
+
+hardware/
+  layouts/                VIA definitions and backup reference sample
+  udev/                   Linux hidraw access rule
+
+research/
+  docs/                   Reverse-engineering reports
+  tools/                  Extraction and analysis utilities
+  vendor-flasher/         Decompiled vendor flasher and resources
+  notes/                  Firmware version comparison
+tests/                    Offline firmware, host, restore, and plugin tests
 ```
 
 ---
@@ -60,14 +65,13 @@ The patched firmware fixes the VIA color handler by inserting an HSV-to-RGB conv
 
 ### 1. Generate the patched firmware
 
-Pre-built binaries are included (`firmware/firmware_patched.bin` and `firmware/code_2M_patched.bin`), but you can regenerate them:
+Pre-built v1.04 binaries are included in `firmware/releases/v1.04/`; the extracted stock image and OTA wrapper are in `firmware/sources/`. Regenerate the v1.04 hue patch with:
 
-```
-cd scripts
-python3 patch_firmware.py
+```sh
+python3 firmware/tools/patching/patch_firmware.py
 ```
 
-This reads `firmware/firmware.bin`, applies the patch, verifies the CRC, and produces `firmware_patched.bin` and `code_2M_patched.bin` in the `firmware/` directory.
+The builder verifies the patch site and CRC, then writes the standalone and OTA outputs to `firmware/releases/v1.04/`.
 
 ### 2. Flash via `flash_ota.py` (recommended)
 
@@ -80,39 +84,38 @@ This reads `firmware/firmware.bin`, applies the patch, verifies the CRC, and pro
 
 **Flash the patched firmware:**
 
-```
-cd scripts
-python3 flash_ota.py ../firmware/firmware_patched.bin
+```sh
+python3 host/linux/flash_ota.py firmware/releases/v1.04/firmware_patched.bin
 ```
 
 Or using the full OTA image:
 
-```
-python3 flash_ota.py ../firmware/code_2M_patched.bin
+```sh
+python3 host/linux/flash_ota.py firmware/releases/v1.04/code_2M_patched.bin
 ```
 
-The script will show the firmware details, ask for confirmation, then flash with a progress bar. The keyboard reboots automatically after a successful flash.
+The script shows firmware details, asks for confirmation, then flashes with a progress bar. The keyboard reboots automatically after a successful flash.
 
 **Other options:**
 
-```
+```sh
 # Dry run — show what would be sent without flashing
-python3 flash_ota.py --dry-run ../firmware/firmware_patched.bin
+python3 host/linux/flash_ota.py --dry-run firmware/releases/v1.04/firmware_patched.bin
 
 # Specify device manually
-python3 flash_ota.py --device /dev/hidraw4 ../firmware/firmware_patched.bin
+python3 host/linux/flash_ota.py --device /dev/hidraw4 firmware/releases/v1.04/firmware_patched.bin
 
 # Probe the OTA interface without flashing
-python3 flash_ota.py --probe
+python3 host/linux/flash_ota.py --probe
 ```
 
 ### Flash via the Windows installer
 
-`installer/Crush80FirmwareInstaller` contains a WPF installer targeting .NET 10 on Windows. It auto-detects the OTA HID interface by VID, PID, and usage page, validates the selected firmware, then performs the same response-driven Telink OTA transfer as `flash_ota.py`.
+`host/windows/Crush80FirmwareInstaller/` contains the WPF installer targeting .NET 10 on Windows. It auto-detects the OTA HID interface by VID, PID, and usage page, validates the selected firmware, then performs the same response-driven Telink OTA transfer as `host/linux/flash_ota.py`.
 
 ```powershell
-cd installer/Crush80FirmwareInstaller
-dotnet run --project Crush80FirmwareInstaller
+cd host/windows/Crush80FirmwareInstaller
+dotnet run --project Crush80FirmwareInstaller.csproj
 ```
 
 The output directory contains `firmware-catalog.json` and a `firmware/` folder beside the executable. Firmware releases are external data, not embedded resources. To ship a newer patched binary without recompiling:
@@ -123,26 +126,35 @@ The output directory contains `firmware-catalog.json` and a `firmware/` folder b
 
 Device targets in the same JSON file configure VID, PID, HID usage page, report ID, and OTA timeouts. The supplied catalog selects wired Crush 80 devices at `320F:5055`, usage page `0xFFEF`, report ID `5`, and offers patched firmware versions 1.06 and 1.04.
 
-> **Warning:** Flashing custom firmware carries risk. Keep a copy of the original `firmware.bin` and `code_2M.bin` so you can restore stock firmware if needed. The OTA bootloader should remain intact even after a failed flash, allowing recovery.
+> **Warning:** Flashing custom firmware carries risk. Keep the stock `firmware/sources/firmware.bin` and `firmware/sources/code_2M.bin` available for recovery. Recovery depends on the OTA interface remaining available; do not assume a physical key sequence guarantees bootloader entry.
 
 ---
 
 ## Installing the SignalRGB Plugin
 
-The plugin file is `SignalRGB/WobkeyCrush80.js`. It must be placed in SignalRGB's custom plugins folder so it overrides the built-in device handling.
+Choose the plugin that matches both firmware and connection mode:
+
+| Firmware / connection | Plugin |
+|---|---|
+| Hue patch, wired USB (legacy) | `plugins/signalrgb/wired/WobkeyCrush80.js` |
+| Hue patch, wired USB (recommended) | `plugins/signalrgb/wired/WobkeyCrush80_v2.js` |
+| Hue patch, 2.4 GHz dongle | `plugins/signalrgb/wireless/WobkeyCrush80Wireless_v2.js` |
+| Hue patch, 2.4 GHz dongle (legacy) | `plugins/signalrgb/wireless/WobkeyCrush80Wireless.js` |
+| Per-key firmware, wired USB | `plugins/signalrgb/wired/WobkeyCrush80_v3.js` |
+| Per-key firmware, 2.4 GHz dongle (experimental) | `plugins/signalrgb/wireless/WobkeyCrush80Wireless_v3.js` |
 
 ### Steps
 
-1. Open **SignalRGB**
-2. Go to the **Devices** page and find the Wobkey Crush 80
-3. Open the device's **Device Information** page
-4. Click the **Plugins** button — this opens the custom plugins folder in your file explorer
-5. Copy `WobkeyCrush80.js` into that folder
-6. **Restart SignalRGB** completely (close and relaunch)
+1. Open **SignalRGB**.
+2. Go to the **Devices** page and find the Wobkey Crush 80.
+3. Open the device's **Device Information** page.
+4. Click the **Plugins** button to open the custom plugins folder.
+5. Copy the matching plugin from the table above into that folder.
+6. **Restart SignalRGB** completely (close and relaunch).
 
 The keyboard should now appear as a controllable device. SignalRGB effects will be synced to the keyboard's backlight.
 
-### How the Plugin Works
+### Legacy wired V1 plugin behavior
 
 - On **Initialize**, the plugin switches the keyboard to solid-color mode (Effect 6 / `LIGHT_MODE`)
 - On each **Render** frame, it averages all LED positions on the SignalRGB canvas into a single RGB color, converts it to HSV, and sends the hue + saturation via VIA channel 3 (command `0x07`). Brightness is derived from the V component and mapped to the keyboard's 0–9 range
@@ -151,7 +163,7 @@ The keyboard should now appear as a controllable device. SignalRGB effects will 
 
 ### Removing the Plugin
 
-Delete `WobkeyCrush80.js` from the custom plugins folder and restart SignalRGB. The keyboard will revert to default behavior.
+Delete the same matching plugin file you installed from the table above and restart SignalRGB. The keyboard will revert to default behavior.
 
 > **Note:** While a custom plugin is installed, SignalRGB will not apply its own updates or fixes for that device. Remove the plugin file to receive upstream improvements again.
 
@@ -159,7 +171,7 @@ Delete `WobkeyCrush80.js` from the custom plugins folder and restart SignalRGB. 
 
 ## VIA Test Tool
 
-`SignalRGB/via-test.html` is a standalone browser-based tool for testing VIA communication with the keyboard over WebHID. Open it in Chrome or Edge, click **Connect**, and use the controls to send color, brightness, and effect commands. This is useful for verifying the firmware patch is working before setting up SignalRGB.
+`plugins/tools/via-test.html` is a standalone browser-based tool for testing VIA communication with the keyboard over WebHID. Open it in Chrome or Edge, click **Connect**, and use the controls to send color, brightness, and effect commands. This is useful for verifying the firmware patch before setting up SignalRGB.
 
 ### USB Interface Map
 
@@ -174,10 +186,10 @@ Delete `WobkeyCrush80.js` from the custom plugins folder and restart SignalRGB. 
 
 ## Linux udev Rule
 
-For hidraw access without root (required by `flash_ota.py` and useful for the VIA test tool):
+For hidraw access without root (required by `host/linux/flash_ota.py` and useful for the VIA test tool):
 
-```
-sudo cp firmware/99-wobkey-crush80.rules /etc/udev/rules.d/
+```sh
+sudo cp hardware/udev/99-wobkey-crush80.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
