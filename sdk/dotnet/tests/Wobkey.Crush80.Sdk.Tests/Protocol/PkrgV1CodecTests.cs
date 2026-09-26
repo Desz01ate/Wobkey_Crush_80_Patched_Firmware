@@ -142,6 +142,8 @@ public sealed class PkrgV1CodecTests
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
     public void MapsFirmwareStatusToRejectedRequestBeforeReadingModePayload(byte status)
     {
         var response = new byte[PkrgV1Codec.PayloadLength];

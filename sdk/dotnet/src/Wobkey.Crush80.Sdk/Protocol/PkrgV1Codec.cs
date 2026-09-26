@@ -1,5 +1,8 @@
 namespace Wobkey.Crush80.Protocol;
 
+// Optimized firmware a88d885 (docs/user/PER-KEY-RGB.md, "Frame streaming (PKRG v2)")
+// retains v1 mode/chunk GET/SET layouts, with chunk accesses on its active buffer.
+// This codec intentionally uses only that sequential common subset, not v2 operations 3/4.
 internal static class PkrgV1Codec
 {
     internal const int PayloadLength = 32;
@@ -254,6 +257,8 @@ internal static class PkrgV1Codec
         string operation)
     {
         ValidateResponseHeader(response, expectedCommand, expectedChannel, expectedOperation, operation);
+        // v2 can also return status 5 for mode/chunk SET while a commit/ACK is pending;
+        // all nonzero PKRG statuses, including v2's 4/5, remain firmware rejections.
         if (response[3] != 0)
             throw new FirmwareRejectedRequestException(response[3], operation);
     }

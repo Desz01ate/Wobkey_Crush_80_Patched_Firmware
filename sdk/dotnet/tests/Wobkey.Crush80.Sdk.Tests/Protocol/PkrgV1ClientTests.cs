@@ -154,6 +154,24 @@ public sealed class PkrgV1ClientTests
     }
 
     [Fact]
+    public async Task OptimizedFirmwarePendingCommitRejectsChunkWriteWithoutChangingColors()
+    {
+        await using var transport = new FakeFirmwareTransport
+        {
+            ProtocolVersion = 2, RejectNextStatus = 5
+        };
+        var client = new PkrgV1Client(transport, TimeSpan.FromSeconds(2));
+        var colors = new[] { new Rgb24(1, 2, 3) };
+
+        var error = await Assert.ThrowsAsync<FirmwareRejectedRequestException>(async () =>
+            await client.WriteRangeAsync(0, colors, CancellationToken.None));
+
+        Assert.Equal((byte)5, error.Status);
+        Assert.Equal("WriteRgb", error.Operation);
+        Assert.Equal(default, transport.Colors[0]);
+    }
+
+    [Fact]
     public async Task InvalidModePacketCannotMutateFirmware()
     {
         await using var transport = new FakeFirmwareTransport();

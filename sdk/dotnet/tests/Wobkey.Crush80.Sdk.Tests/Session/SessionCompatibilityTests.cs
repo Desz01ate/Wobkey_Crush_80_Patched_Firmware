@@ -57,6 +57,8 @@ public sealed class SessionCompatibilityTests
         Assert.Equal(new[] { "GetCapabilities" }, transport.Operations);
     }
 
+    // Firmware a88d885 documents identical v1/v2 mode and RGB chunk GET/SET layouts;
+    // v2 chunks access the active buffer. This exercises that common subset, not streaming.
     [Fact]
     public async Task OptimizedFirmwareUsesOnlySequentialChunksAndRestoresSavedState()
     {
