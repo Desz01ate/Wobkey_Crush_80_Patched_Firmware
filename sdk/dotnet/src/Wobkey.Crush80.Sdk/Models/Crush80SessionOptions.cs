@@ -1,4 +1,4 @@
-namespace Wobkey.Crush80;
+namespace Wobkey.Crush80.Sdk.Models;
 
 /// <summary>Configures communication with a Crush 80 device.</summary>
 public sealed record Crush80SessionOptions

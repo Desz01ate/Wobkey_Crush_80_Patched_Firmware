@@ -1,4 +1,4 @@
-namespace Wobkey.Crush80;
+namespace Wobkey.Crush80.Sdk.Models;
 
 /// <summary>Identifies a discovered Crush 80 HID device interface.</summary>
 /// <param name="Path">The HID device path.</param>

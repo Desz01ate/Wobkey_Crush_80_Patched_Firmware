@@ -1,4 +1,6 @@
-namespace Wobkey.Crush80;
+using Wobkey.Crush80.Sdk.Models;
+
+namespace Wobkey.Crush80.Sdk.Exceptions;
 
 /// <summary>Base type for errors reported by the Crush 80 SDK.</summary>
 public abstract class Crush80SdkException : Exception

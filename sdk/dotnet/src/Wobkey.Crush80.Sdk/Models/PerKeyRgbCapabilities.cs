@@ -1,4 +1,4 @@
-namespace Wobkey.Crush80;
+namespace Wobkey.Crush80.Sdk.Models;
 
 /// <summary>Describes the per-key RGB protocol capabilities reported by firmware.</summary>
 /// <param name="ProtocolVersion">The per-key RGB protocol version.</param>

@@ -1,4 +1,6 @@
-namespace Wobkey.Crush80;
+using Wobkey.Crush80.Sdk.Models;
+
+namespace Wobkey.Crush80.Sdk.Exceptions;
 
 /// <summary>A device response violated the expected PKRG/VIA protocol contract.</summary>
 public sealed class ProtocolViolationException : Crush80SdkException

@@ -1,4 +1,4 @@
-namespace Wobkey.Crush80;
+namespace Wobkey.Crush80.Sdk.Models;
 
 /// <summary>A captured Crush 80 RGB device state.</summary>
 public sealed class RgbDeviceState

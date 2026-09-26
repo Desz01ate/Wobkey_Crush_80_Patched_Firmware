@@ -1,4 +1,6 @@
-namespace Wobkey.Crush80;
+using Wobkey.Crush80.Sdk.Models;
+
+namespace Wobkey.Crush80.Sdk.Exceptions;
 
 /// <summary>No matching wired Crush 80 device was found.</summary>
 public sealed class DeviceNotFoundException : Crush80SdkException

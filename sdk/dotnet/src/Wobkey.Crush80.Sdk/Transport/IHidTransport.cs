@@ -1,4 +1,6 @@
-namespace Wobkey.Crush80.Transport;
+using Wobkey.Crush80.Sdk.Models;
+
+namespace Wobkey.Crush80.Sdk.Transport;
 
 /// <summary>Exchanges canonical 32-byte VIA payloads with a single HID device.</summary>
 public interface IHidTransport : IAsyncDisposable

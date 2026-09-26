@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Wobkey.Crush80.Sdk.Exceptions;
+using Wobkey.Crush80.Sdk.Session;
 using Wobkey.Crush80.Sdk.Tests.Support;
 
 namespace Wobkey.Crush80.Sdk.Tests.Session;

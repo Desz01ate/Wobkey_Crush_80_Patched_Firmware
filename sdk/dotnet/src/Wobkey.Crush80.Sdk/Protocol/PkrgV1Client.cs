@@ -1,6 +1,8 @@
-using Wobkey.Crush80.Transport;
+using Wobkey.Crush80.Sdk.Exceptions;
+using Wobkey.Crush80.Sdk.Models;
+using Wobkey.Crush80.Sdk.Transport;
 
-namespace Wobkey.Crush80.Protocol;
+namespace Wobkey.Crush80.Sdk.Protocol;
 
 // The owning session serializes calls; request and response buffers are intentionally shared.
 internal sealed class PkrgV1Client

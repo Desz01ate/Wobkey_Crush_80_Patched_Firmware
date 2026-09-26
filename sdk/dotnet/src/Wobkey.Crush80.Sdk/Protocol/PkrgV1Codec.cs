@@ -1,4 +1,7 @@
-namespace Wobkey.Crush80.Protocol;
+using Wobkey.Crush80.Sdk.Exceptions;
+using Wobkey.Crush80.Sdk.Models;
+
+namespace Wobkey.Crush80.Sdk.Protocol;
 
 // Optimized firmware a88d885 (docs/user/PER-KEY-RGB.md, "Frame streaming (PKRG v2)")
 // retains v1 mode/chunk GET/SET layouts, with chunk accesses on its active buffer.
