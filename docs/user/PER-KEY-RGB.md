@@ -300,6 +300,9 @@ Valid RGB ranges satisfy `1 <= count <= 8`, `start < 92`, and
 nor writes exceed the 32-byte report. Capability discovery is read-only; a
 host must require the signature/version/count before attempting custom SETs.
 
+The shared corpus at `sdk/conformance/pkrg-v1.json` is the cross-language
+observable contract.
+
 ### Implementation plan
 
 **Goal:** host-supplied wired USB per-key colors with deterministic startup,
