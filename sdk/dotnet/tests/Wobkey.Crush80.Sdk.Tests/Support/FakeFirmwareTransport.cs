@@ -21,6 +21,7 @@ internal sealed class FakeFirmwareTransport : IHidTransport
     internal byte Effect { get; set; } = 7;
     internal byte? RejectNextStatus { get; set; }
     internal int? RejectRgbStartOnce { get; set; }
+    internal int? RejectRgbWriteStartOnce { get; set; }
     internal bool? RejectModeValueOnce { get; set; }
     internal string? MalformOperationOnce { get; set; }
     internal bool TimeoutNextRead { get; set; }
@@ -33,6 +34,7 @@ internal sealed class FakeFirmwareTransport : IHidTransport
     internal bool IsDisposed { get; private set; }
     internal Task FirstWriteObserved => _firstWriteObserved.Task;
     internal List<string> Operations { get; } = [];
+    internal List<string> DetailedOperations { get; } = [];
     internal List<int> RgbWriteCounts { get; } = [];
     internal List<Rgb24> RgbWriteFirstColors { get; } = [];
 
@@ -49,6 +51,7 @@ internal sealed class FakeFirmwareTransport : IHidTransport
 
         payload.CopyTo(_pending);
         Operations.Add(DecodeOperation(_pending));
+        DetailedOperations.Add(DecodeDetailedOperation(_pending));
         _hasPending = true;
         if (CancelCallerAfterNextWrite)
         {
@@ -146,9 +149,11 @@ internal sealed class FakeFirmwareTransport : IHidTransport
         {
             var start = _pending[4];
             var count = _pending[5];
-            if (RejectRgbStartOnce == start)
+            if (RejectRgbStartOnce == start || (command == 7 && RejectRgbWriteStartOnce == start))
             {
                 RejectRgbStartOnce = null;
+                if (command == 7)
+                    RejectRgbWriteStartOnce = null;
                 return 2;
             }
             if (count == 0 || count > ChunkLimit || start + count > LedCount || start + count > _colors.Length)
@@ -200,6 +205,16 @@ internal sealed class FakeFirmwareTransport : IHidTransport
             }
         }
     }
+
+    private static string DecodeDetailedOperation(ReadOnlySpan<byte> request) => (request[0], request[1], request[2]) switch
+    {
+        (8, 0x7F, 2) => $"ReadRgb:{request[4]}:{request[5]}",
+        (7, 0x7F, 2) => $"WriteRgb:{request[4]}:{request[5]}",
+        (7, 0x7F, 1) => $"SetEnabled:{(request[4] != 0 ? "true" : "false")}",
+        (7, 3, 1) => $"SetBrightness:{request[3]}",
+        (7, 3, 2) => $"SetEffect:{request[3]}",
+        _ => DecodeOperation(request)
+    };
 
     private static string DecodeOperation(ReadOnlySpan<byte> request) => (request[0], request[1], request[2]) switch
     {

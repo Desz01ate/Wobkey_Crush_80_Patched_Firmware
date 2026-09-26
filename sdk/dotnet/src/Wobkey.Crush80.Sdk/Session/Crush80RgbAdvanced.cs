@@ -25,67 +25,8 @@ public sealed class Crush80RgbAdvanced
     public ValueTask RestoreStateAsync(RgbDeviceState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return _session.ExecuteAsync("RestoreState", async (client, token) =>
-        {
-            List<Exception>? failures = null;
-            var disabled = false;
-            try
-            {
-                await client.SetEnabledAsync(false, token).ConfigureAwait(false);
-                disabled = true;
-            }
-            catch (FirmwareRejectedRequestException error)
-            {
-                (failures ??= []).Add(error);
-            }
-
-            var frameRestored = false;
-            if (disabled)
-            {
-                try
-                {
-                    await client.WriteRangeAsync(0, state.Colors, token).ConfigureAwait(false);
-                    frameRestored = true;
-                }
-                catch (FirmwareRejectedRequestException error)
-                {
-                    (failures ??= []).Add(error);
-                }
-            }
-
-            try
-            {
-                await client.SetBrightnessAsync(state.Brightness, token).ConfigureAwait(false);
-            }
-            catch (FirmwareRejectedRequestException error)
-            {
-                (failures ??= []).Add(error);
-            }
-
-            try
-            {
-                await client.SetEffectAsync(state.Effect, token).ConfigureAwait(false);
-            }
-            catch (FirmwareRejectedRequestException error)
-            {
-                (failures ??= []).Add(error);
-            }
-
-            if (frameRestored)
-            {
-                try
-                {
-                    await client.SetEnabledAsync(state.Enabled, token).ConfigureAwait(false);
-                }
-                catch (FirmwareRejectedRequestException error)
-                {
-                    (failures ??= []).Add(error);
-                }
-            }
-
-            if (failures is { Count: > 0 })
-                throw new StateRestoreException(failures.Count == 1 ? failures[0] : new AggregateException(failures));
-        }, cancellationToken);
+        return _session.ExecuteAsync("RestoreState", (client, token) =>
+            Crush80RgbSession.RestoreStateCoreAsync(client, state, token), cancellationToken, requireNoLease: true);
     }
 
     /// <summary>Reads exactly one full negotiated RGB frame.</summary>
@@ -101,7 +42,7 @@ public sealed class Crush80RgbAdvanced
     {
         ValidateFrame(colors.Length, nameof(colors));
         return _session.ExecuteAsync("WriteFrame", (client, token) =>
-            client.WriteRangeAsync(0, colors, token), cancellationToken);
+            client.WriteRangeAsync(0, colors, token), cancellationToken, requireNoLease: true);
     }
 
     /// <summary>Writes one or more adjacent RGB chunks within the negotiated frame.</summary>
@@ -112,7 +53,7 @@ public sealed class Crush80RgbAdvanced
         if (colors.Length < 1 || colors.Length > _session.Capabilities.LedCount - startIndex)
             throw new ArgumentOutOfRangeException(nameof(colors));
         return _session.ExecuteAsync("WriteRange", (client, token) =>
-            client.WriteRangeAsync(startIndex, colors, token), cancellationToken);
+            client.WriteRangeAsync(startIndex, colors, token), cancellationToken, requireNoLease: true);
     }
 
     /// <summary>Reads whether the per-key RGB override is enabled.</summary>
@@ -123,7 +64,7 @@ public sealed class Crush80RgbAdvanced
     /// <summary>Enables or disables the per-key RGB override.</summary>
     public ValueTask SetEnabledAsync(bool enabled, CancellationToken cancellationToken = default) =>
         _session.ExecuteAsync("SetEnabled", (client, token) =>
-            client.SetEnabledAsync(enabled, token), cancellationToken);
+            client.SetEnabledAsync(enabled, token), cancellationToken, requireNoLease: true);
 
     /// <summary>Reads the OEM hardware brightness.</summary>
     public ValueTask<byte> GetBrightnessAsync(CancellationToken cancellationToken = default) =>
@@ -136,7 +77,7 @@ public sealed class Crush80RgbAdvanced
         if (brightness > 9)
             throw new ArgumentOutOfRangeException(nameof(brightness));
         return _session.ExecuteAsync("SetBrightness", (client, token) =>
-            client.SetBrightnessAsync(brightness, token), cancellationToken);
+            client.SetBrightnessAsync(brightness, token), cancellationToken, requireNoLease: true);
     }
 
     /// <summary>Reads the OEM effect identifier.</summary>
@@ -150,7 +91,7 @@ public sealed class Crush80RgbAdvanced
         if (effect > 18)
             throw new ArgumentOutOfRangeException(nameof(effect));
         return _session.ExecuteAsync("SetEffect", (client, token) =>
-            client.SetEffectAsync(effect, token), cancellationToken);
+            client.SetEffectAsync(effect, token), cancellationToken, requireNoLease: true);
     }
 
     private void ValidateFrame(int length, string parameterName)

@@ -34,6 +34,17 @@ operation before changing its supplied memory. Session operations are serialized
 after a timeout, malformed response, or transport failure, dispose and reopen
 the session instead of retrying on the faulted request stream.
 
+Use `await session.AcquireControlAsync(initialFrame, options)` to temporarily take
+exclusive control of all 92 LEDs. The session first snapshots colors, override
+mode, brightness, and effect; it then disables the override, writes the initial
+frame, selects the requested hardware brightness (default 9) and effect 6, and
+enables the override. Only one control lease can be active. While it is active,
+`session.Advanced` reads remain available, but its mutations and state restoration
+are blocked. `await lease.RestoreAsync()` restores the snapshot in safe order;
+disposing the lease does the same by default. Set
+`RgbControlOptions.RestoreStateOnDispose = false` to release ownership without
+restoring the snapshot. Dispose or restore the lease before closing its session.
+
 ## The Problem
 
 The VIA SET handler at `0xDA20` stores the H byte to the internal state struct but then overwrites the RGB fields with stale cached values from global RAM instead of converting H to RGB. The result is that any color set through VIA (including SignalRGB) is ignored — the keyboard stays on whatever color was last set locally.
