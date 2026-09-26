@@ -13,7 +13,8 @@ import unicorn as uc
 from unicorn import riscv_const as rv
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "firmware/tools/patching"))
+sys.path.insert(0, str(ROOT / "host/linux"))
 FLASH = 0x20000000
 GP = 0x80800
 STATE = GP + 0x74
@@ -22,7 +23,7 @@ BUFFER = 0x9FEE0
 MODE = 0x9FFFC
 PACKET = GP + 0x398
 NEW_SP = 0x9FEE0
-BASE = (ROOT / "firmware/v2_patched.bin").read_bytes()
+BASE = (ROOT / "firmware/releases/v1.06/v2_patched.bin").read_bytes()
 
 
 def reg(index):

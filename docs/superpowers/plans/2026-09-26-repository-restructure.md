@@ -36,10 +36,12 @@
 
 - [ ] **Step 1: Run baseline behavior suites before moving files**
 
-Run: `python3 -m unittest discover -s tests -v`
-Expected: existing unittest suite passes; record any environment/dependency failure before proceeding.
+Run: `python3 -m venv /tmp/wobkey-restructure-venv`
+Run: `/tmp/wobkey-restructure-venv/bin/pip install -r tests/requirements.txt`
+Run: `/tmp/wobkey-restructure-venv/bin/python -m unittest discover -s tests -v`
+Expected: existing unittest suite passes.
 
-Run: `node --test tests/test_signalrgb_v3.mjs`
+Run: `node --experimental-vm-modules --test tests/test_signalrgb_v3.mjs`
 Expected: existing plugin behavior tests pass.
 
 - [ ] **Step 2: Verify firmware provenance before classifying release files**
@@ -90,7 +92,7 @@ Move the HTML tool under `plugins/tools/` and update all tracked instructions th
 
 - [ ] **Step 4: Run SignalRGB behavior suite**
 
-Run: `node --test tests/test_signalrgb_v3.mjs`
+Run: `node --experimental-vm-modules --test tests/test_signalrgb_v3.mjs`
 Expected: all behavior tests pass against the moved default plugin.
 
 ### Task 3: Flatten installer and preserve distribution contract
@@ -102,7 +104,7 @@ Expected: all behavior tests pass against the moved default plugin.
 
 **Interfaces:**
 - Installer catalog still resolves firmware under output `firmware/` and plugins under output `SignalRGB/`.
-- Keep the same firmware/plugin payload basenames, SHA-256 values, catalog IDs, and published artifact layout.
+- Keep firmware hashes, plugin IDs/destination filenames, and published output paths unchanged. Update SHA-256 values only for wired/wireless V3 plugin files whose header path comments were corrected.
 
 - [ ] **Step 1: Move solution/project sources to the flattened Windows host directory**
 
@@ -155,8 +157,8 @@ Search tracked source/docs for stale old roots (`scripts/`, `SignalRGB/`, old in
 
 - [ ] **Step 1: Run all available behavior tests**
 
-Run: `python3 -m unittest discover -s tests -v`
-Run: `node --test tests/test_signalrgb_v3.mjs`
+Run: `/tmp/wobkey-restructure-venv/bin/python -m unittest discover -s tests -v`
+Run: `node --experimental-vm-modules --test tests/test_signalrgb_v3.mjs`
 Expected: all tests pass after path relocation.
 
 - [ ] **Step 2: Verify firmware builders without replacing releases**
