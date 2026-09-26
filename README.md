@@ -20,6 +20,20 @@ installation, wire protocol, and verification status.
   optional per-key v1.06 firmware and both V3 plugin installers. Wireless V3
   support remains experimental and unverified.
 
+### C# RGB SDK
+
+The `sdk/dotnet/` solution provides `Wobkey.Crush80.Sdk` for applications using
+the wired per-key RGB firmware. An injected `IHidTransport` can be opened with
+`Crush80RgbSession.OpenAsync(transport)`; opening performs only a read-only PKRG
+capability handshake and rejects firmware that is not version 1 with 92 LEDs
+and eight LEDs per transfer. The session owns and closes the injected transport.
+
+`session.Advanced` supports full-frame and range RGB writes, readback, override
+mode, OEM brightness/effect, and ordered state capture/restoration. Await each
+operation before changing its supplied memory. Session operations are serialized;
+after a timeout, malformed response, or transport failure, dispose and reopen
+the session instead of retrying on the faulted request stream.
+
 ## The Problem
 
 The VIA SET handler at `0xDA20` stores the H byte to the internal state struct but then overwrites the RGB fields with stale cached values from global RAM instead of converting H to RGB. The result is that any color set through VIA (including SignalRGB) is ignored — the keyboard stays on whatever color was last set locally.

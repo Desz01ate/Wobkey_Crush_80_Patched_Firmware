@@ -16,6 +16,21 @@ public sealed class RgbDeviceState
         Effect = effect;
     }
 
+    // The capture path creates this array itself and never exposes its writable reference.
+    internal static RgbDeviceState FromCapturedFrame(Rgb24[] colors, bool enabled, byte brightness, byte effect) =>
+        new(colors, enabled, brightness, effect);
+
+    private RgbDeviceState(Rgb24[] colors, bool enabled, byte brightness, byte effect)
+    {
+        if (colors.Length != 92)
+            throw new ArgumentException("A captured Crush 80 state requires exactly 92 colors.", nameof(colors));
+
+        _colors = colors;
+        Enabled = enabled;
+        Brightness = brightness;
+        Effect = effect;
+    }
+
     /// <summary>Gets the captured color for each of the 92 LEDs.</summary>
     public ReadOnlyMemory<Rgb24> Colors => _colors;
 
