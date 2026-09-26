@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crush 80 SDK Emulator</title>
+<style>
+:root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: #090c12; color: #e8edf5; }
+main { width: min(1500px, 96vw); margin: 0 auto; padding: 28px 0 40px; }
+header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 20px; }
+h1 { margin: 0 0 6px; font-size: clamp(1.3rem, 2vw, 2rem); }
+p { margin: 0; color: #8f9caf; }
+.status { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.badge { border: 1px solid #293244; border-radius: 999px; background: #121824; color: #c8d1df; padding: 7px 11px; font: 600 0.76rem ui-monospace, monospace; }
+.badge.good { border-color: #225d47; color: #70e0ac; }
+.badge.warn { border-color: #705628; color: #f2c46d; }
+.panel { border: 1px solid #222b3a; border-radius: 18px; background: linear-gradient(180deg, #111722, #0d121b); padding: 18px; box-shadow: 0 22px 70px #0008; }
+.notice { min-height: 22px; margin: 2px 2px 14px; color: #f2c46d; font-size: 0.88rem; }
+.keyboard { display: block; width: 100%; aspect-ratio: 38 / 14; overflow: visible; }
+.key rect { stroke: #667085; stroke-width: .08; transition: fill 45ms linear, filter 45ms linear; }
+.key text { font: 600 .42px ui-monospace, monospace; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; color: #8f9caf; font-size: .82rem; }
+label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+input { accent-color: #7a8cff; }
+.disconnected .key rect { filter: saturate(.2) brightness(.55); }
+@media (max-width: 760px) { header, footer { align-items: flex-start; flex-direction: column; } .status { justify-content: flex-start; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div>
+    <h1>Crush 80 SDK Emulator</h1>
+    <p>Live PKRG frame supplied by the SDK application. No HID hardware is used.</p>
+  </div>
+  <div class="status">
+    <span id="connection" class="badge">starting</span>
+    <span id="override" class="badge">override --</span>
+    <span id="effect" class="badge">effect --</span>
+    <span id="brightness" class="badge">brightness --</span>
+    <span id="version" class="badge">frame --</span>
+  </div>
+</header>
+<section class="panel" id="panel">
+  <div class="notice" id="notice"></div>
+  <svg id="keyboard" class="keyboard" viewBox="-1 -1 38 14" role="img" aria-label="Emulated Crush 80 RGB keyboard"></svg>
+  <footer>
+    <span>Each shape is a firmware LED slot. Caps Lock has two overlapping emitters; Space has three.</span>
+    <label><input id="scale" type="checkbox"> Approximate firmware brightness scaling</label>
+  </footer>
+</section>
+</main>
+<script>
+const svg = document.getElementById('keyboard');
+const panel = document.getElementById('panel');
+const notice = document.getElementById('notice');
+const scaleToggle = document.getElementById('scale');
+const brightnessScale = [0, 21, 42, 63, 84, 105, 126, 147, 168, 192];
+let version = -1;
+let lastState = null;
+const slotRects = [];
+const groupTexts = [];
+
+function element(name, attributes = {}) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', name);
+  for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
+  return node;
+}
+
+async function loadLayout() {
+  const response = await fetch('/api/layout', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`layout request failed: ${response.status}`);
+  const layout = await response.json();
+  const groups = new Map();
+  for (const slot of layout.slots) {
+    const key = `${slot.x},${slot.y}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(slot);
+  }
+
+  const positions = Array.from(groups.values(), slots => slots[0]);
+  for (const slots of groups.values()) {
+    const first = slots[0];
+    const nearest = positions
+      .filter(point => point.y === first.y && point.x !== first.x)
+      .reduce((distance, point) => Math.min(distance, Math.abs(point.x - first.x)), Infinity);
+    const groupWidth = nearest < 1.5 ? 0.86 : 1.62;
+    const width = groupWidth / slots.length;
+    const group = element('g', { class: 'key', transform: `translate(${first.x} ${first.y})` });
+    for (let index = 0; index < slots.length; index++) {
+      const slot = slots[index];
+      const rect = element('rect', {
+        x: -groupWidth / 2 + index * width,
+        y: -0.62,
+        width,
+        height: 1.24,
+        rx: 0.16,
+        fill: '#000000',
+        'data-slot': slot.index
+      });
+      const title = element('title');
+      title.textContent = `slot ${slot.index}: ${slot.key}`;
+      rect.appendChild(title);
+      group.appendChild(rect);
+      slotRects[slot.index] = rect;
+    }
+    const text = element('text', { x: 0, y: 0, fill: '#f7f9fc' });
+    text.textContent = first.label;
+    text.style.fontSize = first.label.length > 5 ? '.32px' : first.label.length > 4 ? '.36px' : '.42px';
+    group.appendChild(text);
+    groupTexts.push({ text, slots });
+    svg.appendChild(group);
+  }
+}
+
+function colorAt(state, index) {
+  const factor = scaleToggle.checked ? brightnessScale[state.brightness] / 256 : 1;
+  const offset = index * 3;
+  return [
+    Math.round(state.colors[offset] * factor),
+    Math.round(state.colors[offset + 1] * factor),
+    Math.round(state.colors[offset + 2] * factor)
+  ];
+}
+
+function render(state) {
+  lastState = state;
+  for (let index = 0; index < slotRects.length; index++) {
+    const [r, g, b] = colorAt(state, index);
+    slotRects[index].setAttribute('fill', `rgb(${r} ${g} ${b})`);
+  }
+  for (const group of groupTexts) {
+    let luminance = 0;
+    for (const slot of group.slots) {
+      const [r, g, b] = colorAt(state, slot.index);
+      luminance += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+    luminance /= group.slots.length;
+    group.text.setAttribute('fill', luminance > 145 ? '#081018' : '#f7f9fc');
+  }
+
+  panel.classList.toggle('disconnected', !state.connected);
+  const connection = document.getElementById('connection');
+  connection.textContent = state.connected ? 'transport connected' : 'transport closed';
+  connection.className = `badge ${state.connected ? 'good' : 'warn'}`;
+  const override = document.getElementById('override');
+  override.textContent = `override ${state.enabled ? 'on' : 'off'}`;
+  override.className = `badge ${state.enabled ? 'good' : 'warn'}`;
+  document.getElementById('effect').textContent = `effect ${state.effect}`;
+  document.getElementById('brightness').textContent = `brightness ${state.brightness}/9`;
+  document.getElementById('version').textContent = `frame ${state.version}`;
+  notice.textContent = state.enabled && state.effect === 6
+    ? ''
+    : 'The RGB buffer is visible for inspection, but physical per-key output would require override enabled with effect 6.';
+}
+
+scaleToggle.addEventListener('change', () => { if (lastState) render(lastState); });
+
+async function updateLoop() {
+  while (true) {
+    try {
+      const response = await fetch(`/api/state?after=${version}`, { cache: 'no-store' });
+      if (response.status === 200) {
+        const state = await response.json();
+        version = state.version;
+        render(state);
+      } else if (response.status !== 204) {
+        throw new Error(`state request failed: ${response.status}`);
+      }
+    } catch (error) {
+      document.getElementById('connection').textContent = 'visualizer unavailable';
+      document.getElementById('connection').className = 'badge warn';
+      notice.textContent = error.message;
+    }
+    await new Promise(resolve => setTimeout(resolve, 33));
+  }
+}
+
+loadLayout().then(updateLoop).catch(error => { notice.textContent = error.message; });
+</script>
+</body>
+</html>

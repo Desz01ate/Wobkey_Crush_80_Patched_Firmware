@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>14.0</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Wobkey.Crush80.Emulator</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Wobkey Crush 80 Community</Authors>
+    <Description>In-process Crush 80 SDK transport emulator with a local browser visualizer.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RootNamespace>Wobkey.Crush80.Emulator</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../../../sdk/dotnet/src/Wobkey.Crush80.Sdk/Wobkey.Crush80.Sdk.csproj" />
+    <ProjectReference Include="../../../sdk/dotnet/adapters/Wobkey.Crush80.Adapter/Wobkey.Crush80.Adapter.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Web/index.html" />
+    <None Include="../../README.md" Pack="true" PackagePath="README.md" />
+    <None Include="../../../sdk/dotnet/LICENSE.txt" Pack="true" PackagePath="LICENSE.txt" />
+  </ItemGroup>
+</Project>

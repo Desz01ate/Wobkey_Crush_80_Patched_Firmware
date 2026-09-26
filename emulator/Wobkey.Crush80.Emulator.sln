@@ -1,0 +1,31 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wobkey.Crush80.Emulator", "src\Wobkey.Crush80.Emulator\Wobkey.Crush80.Emulator.csproj", "{8C9CFBCE-C1A6-4796-9A5C-56A8DE878882}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wobkey.Crush80.Emulator.App", "app\Wobkey.Crush80.Emulator.App\Wobkey.Crush80.Emulator.App.csproj", "{0E8B963E-CD6C-4EA3-BC2D-744BC902401E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wobkey.Crush80.Emulator.Tests", "tests\Wobkey.Crush80.Emulator.Tests\Wobkey.Crush80.Emulator.Tests.csproj", "{A73786C1-2F5A-4F4A-8B7D-A95617E267D0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8C9CFBCE-C1A6-4796-9A5C-56A8DE878882}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8C9CFBCE-C1A6-4796-9A5C-56A8DE878882}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8C9CFBCE-C1A6-4796-9A5C-56A8DE878882}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8C9CFBCE-C1A6-4796-9A5C-56A8DE878882}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0E8B963E-CD6C-4EA3-BC2D-744BC902401E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0E8B963E-CD6C-4EA3-BC2D-744BC902401E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0E8B963E-CD6C-4EA3-BC2D-744BC902401E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0E8B963E-CD6C-4EA3-BC2D-744BC902401E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A73786C1-2F5A-4F4A-8B7D-A95617E267D0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A73786C1-2F5A-4F4A-8B7D-A95617E267D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A73786C1-2F5A-4F4A-8B7D-A95617E267D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A73786C1-2F5A-4F4A-8B7D-A95617E267D0}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
