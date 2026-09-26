@@ -1,16 +1,23 @@
 namespace Wobkey.Crush80.Adapter;
 
-internal readonly record struct Crush80Led(Crush80Key Key, byte X, byte Y);
+/// <summary>One firmware RGB slot in the built-in Crush 80 canvas.</summary>
+/// <param name="Key">Logical key illuminated by the slot.</param>
+/// <param name="X">Horizontal canvas coordinate.</param>
+/// <param name="Y">Vertical canvas coordinate.</param>
+public readonly record struct Crush80Led(Crush80Key Key, byte X, byte Y);
 
 /// <summary>
 /// Firmware-slot ordering and sparse canvas coordinates derived from the wired SignalRGB plugin;
 /// mapped key assignments and row-major order have since been visually verified on hardware.
 /// </summary>
-internal static class Crush80Layout
+public static class Crush80Layout
 {
-    internal const int Width = 37;
-    internal const int Height = 12;
-    internal const int SlotCount = 92;
+    /// <summary>Width of the sparse LED canvas.</summary>
+    public const int Width = 37;
+    /// <summary>Height of the sparse LED canvas.</summary>
+    public const int Height = 12;
+    /// <summary>Number of addressable firmware RGB slots.</summary>
+    public const int SlotCount = 92;
 
     private static readonly Crush80Led[] OrderedSlots =
     [
@@ -47,6 +54,11 @@ internal static class Crush80Layout
         new(Crush80Key.RightCtrl, 28, 11), new(Crush80Key.LeftArrow, 31, 11),
         new(Crush80Key.DownArrow, 33, 11), new(Crush80Key.RightArrow, 35, 11)
     ];
+
+    private static readonly IReadOnlyList<Crush80Led> PublicSlots = Array.AsReadOnly(OrderedSlots);
+
+    /// <summary>Gets all LED slots in firmware index order.</summary>
+    public static IReadOnlyList<Crush80Led> LedSlots => PublicSlots;
 
     internal static ReadOnlySpan<Crush80Led> Slots => OrderedSlots;
     internal static Crush80Key KeyAt(int index) => OrderedSlots[index].Key;

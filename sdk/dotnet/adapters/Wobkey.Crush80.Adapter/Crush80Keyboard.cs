@@ -52,7 +52,14 @@ public sealed class Crush80Keyboard : IAsyncDisposable
         return AcquireAsync(Crush80RgbSession.OpenAsync(descriptor, cancellationToken: cancellationToken), cancellationToken);
     }
 
-    internal static ValueTask<Crush80Keyboard> OpenAsync(
+    /// <summary>
+    /// Opens an injected SDK transport, captures its state, and displays black. This overload is
+    /// intended for emulators and controlled integration tests; ownership of the transport transfers
+    /// to the returned keyboard.
+    /// </summary>
+    /// <param name="transport">Transport representing one compatible Crush 80 VIA interface.</param>
+    /// <param name="cancellationToken">Cancels session opening or control acquisition.</param>
+    public static ValueTask<Crush80Keyboard> OpenAsync(
         IHidTransport transport, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(transport);

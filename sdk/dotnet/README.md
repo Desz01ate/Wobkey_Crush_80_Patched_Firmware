@@ -26,6 +26,22 @@ await lease.RestoreAsync();
 
 For precise control without an active lease, use `session.Advanced` for frame/range reads and writes, override mode, OEM brightness/effect, and ordered capture/restoration. Its mutation and restore operations are unavailable while a control lease owns the session. If providing your own `IHidTransport`, `Crush80RgbSession.OpenAsync(transport)` transfers ownership of the transport to the session. Do not mutate a supplied frame until its asynchronous operation has completed.
 
+## Hardware-free visual emulator
+
+The repository-level [`emulator/`](../../emulator/README.md) project provides in-process
+and standalone PKRG v2 transports plus a loopback browser view of all 92 RGB slots. The
+standalone server generates no animation; another process connects through
+`Crush80RemoteTransport` and passes that transport to `Crush80RgbSession.OpenAsync` or the
+grid adapter.
+
+```sh
+dotnet run --project emulator/server/Wobkey.Crush80.Emulator.Server -- --open
+```
+
+This verifies application frame output and SDK lifecycle behavior without opening HID
+hardware. It does not reproduce USB timing, HID permissions, physical scanout, or OEM
+animation algorithms.
+
 ## Safe sample and release smoke
 
 From the repository root:

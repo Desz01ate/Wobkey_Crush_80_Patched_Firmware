@@ -31,6 +31,11 @@ keyboard.Grid.SetKey(Crush80Key.Esc, new Rgb24(255, 0, 0));
 await keyboard.ApplyAsync();
 ```
 
+For hardware-free integration, `OpenAsync(IHidTransport)` accepts either the in-process
+emulator or a `Crush80RemoteTransport` connected to the standalone server. The repository's
+[`emulator/`](../../../../emulator/README.md) project uses this overload to run the same grid,
+apply, lease, and restoration path while displaying the resulting RGB frame in a local browser.
+
 `OpenAsync(descriptor)` opens that descriptor; it does not silently choose a different device. `Grid.Width` and `Grid.Height` are 37 and 12. `SetKey` edits every LED assigned to a logical enum key, `SetAt(x, y)` edits emitters at a canvas point, and `SetAll` (also available as `Fill`) edits all 92 frame slots. Enumerating `Grid` yields each mapped `Crush80Key` once, ordered from top to bottom and left to right by its first LED. Coordinates are points on the sparse built-in canvas, not firmware/VIA row-column addresses; gaps have no LEDs. Call `ApplyAsync` to submit the current frame. `await using` disposes the adapter and asks the SDK to restore the state captured when control was acquired.
 
 ## Mapping and hardware safety
