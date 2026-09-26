@@ -52,3 +52,5 @@ BuildLog.*
 *.snupkg
 **/packages/*
 !**/packages/build/
+
+**/.idea/**

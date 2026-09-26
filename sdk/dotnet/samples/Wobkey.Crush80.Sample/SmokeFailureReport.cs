@@ -1,4 +1,5 @@
 using Wobkey.Crush80;
+using Wobkey.Crush80.Sdk.Exceptions;
 
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Wobkey.Crush80.Sdk.Tests")]
 
