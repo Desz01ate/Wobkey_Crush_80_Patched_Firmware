@@ -23,6 +23,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wobkey.Crush80.Adapter.Test
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wobkey.Crush80.Adapter.Sample", "samples\Wobkey.Crush80.Adapter.Sample\Wobkey.Crush80.Adapter.Sample.csproj", "{EBBC66D1-4876-4E2E-9E6B-0D4999841B8A}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "emulators", "emulators", "{828B8F3C-BD96-447A-BA23-6CD69629ADA8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wobkey.Crush80.Emulator", "..\..\emulator\src\Wobkey.Crush80.Emulator\Wobkey.Crush80.Emulator.csproj", "{35C98D09-CE5B-490D-A7FB-33E373AC2541}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -105,6 +109,18 @@ Global
 		{EBBC66D1-4876-4E2E-9E6B-0D4999841B8A}.Release|x64.Build.0 = Release|Any CPU
 		{EBBC66D1-4876-4E2E-9E6B-0D4999841B8A}.Release|x86.ActiveCfg = Release|Any CPU
 		{EBBC66D1-4876-4E2E-9E6B-0D4999841B8A}.Release|x86.Build.0 = Release|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Debug|x64.Build.0 = Debug|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Debug|x86.Build.0 = Debug|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Release|Any CPU.Build.0 = Release|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Release|x64.ActiveCfg = Release|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Release|x64.Build.0 = Release|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Release|x86.ActiveCfg = Release|Any CPU
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -116,5 +132,6 @@ Global
 		{4BE4E26E-D9D0-479C-BF3D-E1EE067FBC52} = {EFEE66D3-2DAF-460C-BC44-05CDBEE3327A}
 		{E3C28FB0-A17D-4983-8E76-C70ECDF4E75A} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{EBBC66D1-4876-4E2E-9E6B-0D4999841B8A} = {CB229C69-9E13-4646-8C8C-3259E3A3FF2E}
+		{35C98D09-CE5B-490D-A7FB-33E373AC2541} = {828B8F3C-BD96-447A-BA23-6CD69629ADA8}
 	EndGlobalSection
 EndGlobal

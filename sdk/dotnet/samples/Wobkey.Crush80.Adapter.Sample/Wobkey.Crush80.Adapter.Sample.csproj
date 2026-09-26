@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../adapters/Wobkey.Crush80.Adapter/Wobkey.Crush80.Adapter.csproj" />
+    <ProjectReference Include="..\..\..\..\emulator\src\Wobkey.Crush80.Emulator\Wobkey.Crush80.Emulator.csproj" />
   </ItemGroup>
 </Project>

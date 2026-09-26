@@ -1,5 +1,5 @@
-using System.Collections.Generic;
 using Wobkey.Crush80.Adapter;
+using Wobkey.Crush80.Emulator;
 using Wobkey.Crush80.Sdk.Models;
 
 public static class Program
@@ -7,26 +7,29 @@ public static class Program
     public static async Task<int> Main(string[] args)
     {
         var devices = Crush80Keyboard.EnumerateDevices();
+        Crush80Keyboard keyboard;
 
         if (devices.Count == 0)
         {
-            await Console.Error.WriteLineAsync("Can't find any Crush 80 devices.");
-            return 1;
-        }
+            var transport = await Crush80RemoteTransport.ConnectAsync(
+                new Uri("tcp://127.0.0.1:5081"));
 
-        var selectedDevice = devices[0];
-
-        Crush80Keyboard keyboard;
-        try
-        {
-            keyboard = await Crush80Keyboard.OpenAsync(selectedDevice);
+            keyboard = await Crush80Keyboard.OpenAsync(transport);
         }
-        catch (Exception error)
+        else
         {
-            await Console.Error.WriteLineAsync($"Could not open the adapter: {error}");
-            await Console.Error.WriteLineAsync(
-                "Opening may have sent the black frame before failing. Any cleanup during failed opening does not verify restored lighting; inspect the keyboard state.");
-            return 1;
+            var selectedDevice = devices[0];
+            try
+            {
+                keyboard = await Crush80Keyboard.OpenAsync(selectedDevice);
+            }
+            catch (Exception error)
+            {
+                await Console.Error.WriteLineAsync($"Could not open the adapter: {error}");
+                await Console.Error.WriteLineAsync(
+                    "Opening may have sent the black frame before failing. Any cleanup during failed opening does not verify restored lighting; inspect the keyboard state.");
+                return 1;
+            }
         }
 
         Exception? applyFailure = null;
@@ -35,6 +38,7 @@ public static class Program
         {
             var red = new Rgb24(255, 0, 0);
             var green = new Rgb24(0, 255, 0);
+            var blue = new Rgb24(0, 0, 255);
             var black = new Rgb24(0, 0, 0);
 
             await using var activeKeyboard = keyboard;
@@ -49,7 +53,8 @@ public static class Program
                 grid.SetAt(3, 0, green); // F1 canvas coordinate.
                 await activeKeyboard.ApplyAsync();
                 Console.WriteLine("ApplyAsync completed: Esc red and the F1 coordinate green were submitted.");
-                Console.WriteLine("Press any key to start the circular rainbow animation. Press any key again to stop.");
+                Console.WriteLine(
+                    "Press any key to start the circular rainbow animation. Press any key again to stop.");
                 Console.ReadKey(intercept: true);
 
                 var keys = new LinkedList<Crush80Key>(grid);
@@ -67,7 +72,7 @@ public static class Program
                         current = current.Next ?? firstKey;
                         keyPosition++;
                     } while (current != firstKey);
-
+                
                     await activeKeyboard.ApplyAsync();
                     hueOffset = (hueOffset + 4) % 360;
                     await Task.Delay(50);
