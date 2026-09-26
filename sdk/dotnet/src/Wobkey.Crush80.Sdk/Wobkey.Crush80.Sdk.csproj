@@ -10,6 +10,7 @@
     <Authors>Wobkey Crush 80 Community</Authors>
     <Description>Managed SDK for the wired Wobkey Crush 80 per-key RGB firmware.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="HidSharp" Version="2.6.4" />
@@ -17,5 +18,7 @@
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="README.md" />
     <None Include="THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="" />
+    <None Include="../../LICENSE.txt" Pack="true" PackagePath="LICENSE.txt" />
+    <None Include="../../licenses/HidSharp-LICENSE.txt" Pack="true" PackagePath="licenses/HidSharp-LICENSE.txt" />
   </ItemGroup>
 </Project>

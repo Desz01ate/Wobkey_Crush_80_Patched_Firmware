@@ -2,6 +2,8 @@
 
 The Wobkey Crush 80 (VID `0x320F`, PID `0x5055`) ships with a firmware bug: setting the hue (H byte) via the VIA USB protocol has no effect on the displayed color. This repository contains a binary patch that fixes the bug and a custom SignalRGB plugin that syncs the keyboard's backlight color to SignalRGB effects.
 
+> **Firmware licensing notice:** QMK identifies WOBKEY firmware as GPLv2-derived without complete corresponding source. This repository currently retains extracted and patched binaries temporarily, but does **not** claim that their distribution is GPLv2-compliant. The community patch tooling is GPL-2.0-only. See [`firmware/GPL-COMPLIANCE.md`](firmware/GPL-COMPLIANCE.md).
+
 ## Per-key RGB (v1.06)
 
 The per-key patch, Linux host tool, and wired SignalRGB V3 plugin are documented
@@ -28,6 +30,10 @@ Run `dotnet run --project sdk/dotnet/samples/Wobkey.Crush80.Sample/Wobkey.Crush8
 
 Windows wired PKRG v2 common-subset SDK behavior was hardware-verified on 2026-09-26 (SDK commit `501b802`, optimized PKRG v2 firmware): `PKRG v2: 92 LEDs, 8 per chunk; override initially False.` The sample reported `Full 92-color pattern readback and restored mode/effect/brightness/RGB verified.` The user physically confirmed Esc red and F1 green during the two-second pattern. This verifies capability negotiation, sequential operation-2 writes, full readback, physical output, and restoration only on Windows. Linux and macOS SDK hardware paths remain implementation targets requiring separate authorized smoke runs. V2 atomic streaming operations 3/4 remain unimplemented and unverified in the SDK.
 
+
+## Licensing
+
+The C# SDK under [`sdk/dotnet/`](sdk/dotnet/) is licensed under the [Apache License 2.0](sdk/dotnet/LICENSE.txt). Its NuGet package includes the SDK license and the complete HidSharp license and attribution. This scoped SDK license does not apply to firmware images, vendor executables, or other repository material.
 
 ## The Problem
 

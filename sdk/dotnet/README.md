@@ -68,4 +68,8 @@ node --experimental-vm-modules --test tests/test_signalrgb_v3.mjs
 dotnet pack sdk/dotnet/src/Wobkey.Crush80.Sdk/Wobkey.Crush80.Sdk.csproj -c Release --output /tmp/wobkey-sdk-pack
 ```
 
-The package contains this README and `THIRD-PARTY-NOTICES.md` with HidSharp attribution. Package publishing is intentionally deferred until the repository owner selects the project's own license; no project license expression is asserted here.
+The SDK is licensed under the [Apache License 2.0](LICENSE.txt). The NuGet package contains `LICENSE.txt`, this README, `THIRD-PARTY-NOTICES.md`, and a verbatim HidSharp license at `licenses/HidSharp-LICENSE.txt`. This license applies to `sdk/dotnet/`; it does not license firmware, vendor binaries, or other repository content.
+
+## License
+
+Copyright for SDK contributions remains with their respective contributors. The SDK source, sample, tests, and package under `sdk/dotnet/` are distributed under Apache-2.0. HidSharp remains copyright James F. Bellinger and is distributed under its own Apache-2.0 notice and license copy.

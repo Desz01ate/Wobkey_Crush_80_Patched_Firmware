@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2026 Wobkey Crush 80 firmware patch contributors
+# Community-authored patch tooling; does not relicense the input firmware.
 """Wired per-key RGB patch for the exact Crush 80 v1.06 hue-patched image.
 
 See docs/user/PER-KEY-RGB.md. This builder never opens a device or flashes firmware.

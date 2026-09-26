@@ -1,5 +1,7 @@
 # Wobkey Crush 80: per-key RGB
 
+> **Licensing:** Complete corresponding source for the QMK-derived Wobkey firmware is not available. Retained stock and patched binaries are not represented as GPLv2-compliant distributions. See [`firmware/GPL-COMPLIANCE.md`](../../firmware/GPL-COMPLIANCE.md). The community patch builders are GPL-2.0-only.
+
 ## Conclusion
 
 **Host-controlled per-key RGB is working on the physical keyboard over USB.**

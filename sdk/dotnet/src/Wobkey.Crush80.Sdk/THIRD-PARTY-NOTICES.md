@@ -17,6 +17,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-The SDK uses HidSharp as a NuGet dependency. The full license text is included
-in the HidSharp package's `LICENSE.txt`. This notice does not assert a license
-for the Wobkey repository or SDK itself.
+The SDK uses HidSharp as a NuGet dependency. A verbatim copy of HidSharp's
+license is distributed with the SDK package at `licenses/HidSharp-LICENSE.txt`.
+The SDK's own Apache-2.0 license is separate from this third-party notice.
