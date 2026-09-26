@@ -12,15 +12,25 @@ installation, wire protocol, and verification status.
 
 - Build: `python3 firmware/tools/patching/patch_firmware_per_key.py`
 - Control: `python3 host/linux/per_key_rgb.py --help`
-- SignalRGB per-key: `plugins/signalrgb/wired/WobkeyCrush80_v3.js` — requires the per-key
-  firmware; copy it into SignalRGB's custom Plugins folder and remove older
-  wired custom plugins for this device before restarting SignalRGB.
+- Native Windows frame benchmark: `py host/windows/benchmark_per_key_rgb.py --frames 600`
+  (requires `hidapi==0.15.0`; close SignalRGB/VIA first). Setup and interpretation:
+  [Windows HID benchmark](docs/user/PER-KEY-RGB.md#native-windows-hid-benchmark).
+- SignalRGB per-key: `plugins/signalrgb/wired/WobkeyCrush80_v3.js` — now requires
+  `firmware/releases/v1.06-per-key/firmware_per_key_v3.bin` (**PKRG v2**).
+  This is a firmware upgrade, not just a plugin replacement. Wired streaming
+  uses 11 silent fragments and one commit/acknowledgement per complete frame.
+  Wired USB frame delivery/readback is hardware-verified. Windows SignalRGB
+  2.5.54 showed no throughput improvement; a native Windows HIDAPI run also
+  measured about 25 ms per transfer. The separate SignalRGB gap remains about
+  33 ms. See [findings and hypotheses](docs/user/PER-KEY-RGB.md#performance-investigation-wrap-up-2026-09-26).
+  Physical appearance, normal typing, and sustained performance still need confirmation.
 - V1/V2 plugins remain whole-board color controllers for hue-patched firmware.
-  Wired V3 is the per-key plugin; wireless V3 is experimental and unverified.
+  Wireless V3 requires the same PKRG v2 image but keeps acknowledged chunk
+  writes; wireless behavior remains experimental and unverified.
 
 - Windows installer project: `host/windows/Crush80FirmwareInstaller/` includes the
-  optional per-key v1.06 firmware and both V3 plugin installers. Wireless V3
-  support remains experimental and unverified.
+  optional PKRG v2 firmware and both matching V3 plugin installers. Keep the
+  older `firmware_per_key_v2.bin` and its matching older plugin for rollback.
 
 ### C# RGB SDK
 
@@ -157,8 +167,8 @@ Choose the plugin that matches both firmware and connection mode:
 | Hue patch, wired USB (recommended) | `plugins/signalrgb/wired/WobkeyCrush80_v2.js` |
 | Hue patch, 2.4 GHz dongle | `plugins/signalrgb/wireless/WobkeyCrush80Wireless_v2.js` |
 | Hue patch, 2.4 GHz dongle (legacy) | `plugins/signalrgb/wireless/WobkeyCrush80Wireless.js` |
-| Per-key firmware, wired USB | `plugins/signalrgb/wired/WobkeyCrush80_v3.js` |
-| Per-key firmware, 2.4 GHz dongle (experimental) | `plugins/signalrgb/wireless/WobkeyCrush80Wireless_v3.js` |
+| PKRG v2 per-key firmware, wired USB | `plugins/signalrgb/wired/WobkeyCrush80_v3.js` |
+| PKRG v2 per-key firmware, 2.4 GHz dongle (experimental) | `plugins/signalrgb/wireless/WobkeyCrush80Wireless_v3.js` |
 
 ### Steps
 

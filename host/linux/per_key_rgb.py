@@ -14,6 +14,8 @@ from via_backup import ViaHID, find_via_device
 CHANNEL = 0x7F
 LED_COUNT = 92
 CHUNK_LEDS = 8
+STREAM_LEDS = 9
+STREAM_CHUNKS = 11
 
 
 class FirmwareError(RuntimeError):
@@ -63,6 +65,7 @@ def validate_range(start, count):
 class PerKeyRGB:
     def __init__(self, hid):
         self.hid = hid
+        self.sequence = 0
         self.info()  # Reject stock/old firmware before issuing any custom SET.
 
     def _request(self, command, operation, payload=()):
@@ -76,17 +79,20 @@ class PerKeyRGB:
             raise FirmwareError('Unexpected VIA response; stop other keyboard-control software')
         if response[3]:
             reason = {1: 'unsupported operation', 2: 'invalid LED range',
-                      3: 'invalid mode'}.get(response[3], 'unknown firmware error')
+                      3: 'invalid mode', 4: 'incomplete or invalid frame',
+                      5: 'frame commit pending'}.get(response[3], 'unknown firmware error')
             raise FirmwareError(f'{reason} (status {response[3]})')
         return response
 
     def info(self):
         reply = self._request(8, 0)
-        if reply[4:11] != b'PKRG' + bytes([1, LED_COUNT, CHUNK_LEDS]):
-            raise FirmwareError('Compatible per-key firmware not detected; no RGB changes sent')
+        if (reply[4:11] != b'PKRG' + bytes([2, LED_COUNT, CHUNK_LEDS])
+                or reply[12:14] != bytes([STREAM_LEDS, STREAM_CHUNKS])):
+            raise FirmwareError('Streaming per-key firmware (PKRG v2) required; no RGB changes sent')
         if reply[11] not in (0, 1):
             raise FirmwareError('Firmware returned an invalid enable flag')
-        return {'protocol': 1, 'led_count': LED_COUNT, 'chunk_leds': CHUNK_LEDS,
+        return {'protocol': 2, 'led_count': LED_COUNT, 'chunk_leds': CHUNK_LEDS,
+                'stream_leds': STREAM_LEDS, 'stream_chunks': STREAM_CHUNKS,
                 'enabled': bool(reply[11])}
 
     def set_enabled(self, enabled):
@@ -115,14 +121,18 @@ class PerKeyRGB:
         # frame caused by discovering an invalid color in a later chunk.
         colors = validate_colors(colors)
         validate_range(start, len(colors))
-        for offset in range(0, len(colors), CHUNK_LEDS):
-            chunk = colors[offset:offset+CHUNK_LEDS]
-            data = bytes(c for rgb in chunk for c in rgb)
-            reply = self._request(7, 2, [start + offset, len(chunk), *data])
-            if reply[4:6] != bytes([start + offset, len(chunk)]) or reply[6:6+len(data)] != data:
-                raise FirmwareError('RGB acknowledgement did not match the write')
-        if self.read(start, len(colors)) != colors:
-            raise FirmwareError('RGB buffer readback did not match the supplied colors')
+        frame = colors if start == 0 and len(colors) == LED_COUNT else self.read()
+        frame[start:start+len(colors)] = colors
+        self.sequence = (self.sequence + 1) & 255
+        for index in range(STREAM_CHUNKS):
+            chunk = frame[index*STREAM_LEDS:(index+1)*STREAM_LEDS]
+            data = bytes(component for rgb in chunk for component in rgb)
+            self.hid.write(bytes([7, CHANNEL, 3, self.sequence, index]) + data)
+        reply = self._request(7, 4, [self.sequence])
+        if reply[4] != self.sequence:
+            raise FirmwareError('Frame acknowledgement did not match the submitted frame')
+        if self.read() != frame:
+            raise FirmwareError('RGB buffer readback did not match the supplied frame')
 
     def show(self):
         self.set_enabled(True)

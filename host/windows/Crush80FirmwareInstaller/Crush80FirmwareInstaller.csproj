@@ -23,7 +23,7 @@
         <None Include="..\..\..\plugins\signalrgb\wired\WobkeyCrush80_v2.js" Link="SignalRGB\WobkeyCrush80_v2.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
         <None Include="..\..\..\plugins\signalrgb\wireless\WobkeyCrush80Wireless.js" Link="SignalRGB\WobkeyCrush80Wireless.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
         <None Include="..\..\..\plugins\signalrgb\wireless\WobkeyCrush80Wireless_v2.js" Link="SignalRGB\WobkeyCrush80Wireless_v2.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
-        <None Include="..\..\..\firmware\releases\v1.06-per-key\firmware_per_key_v2.bin" Link="firmware\firmware_per_key_v2.bin" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+        <None Include="..\..\..\firmware\releases\v1.06-per-key\firmware_per_key_v3.bin" Link="firmware\firmware_per_key_v3.bin" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
         <None Include="..\..\..\plugins\signalrgb\wired\WobkeyCrush80_v3.js" Link="SignalRGB\WobkeyCrush80_v3.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
         <None Include="..\..\..\plugins\signalrgb\wireless\WobkeyCrush80Wireless_v3.js" Link="SignalRGB\WobkeyCrush80Wireless_v3.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     </ItemGroup>

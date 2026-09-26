@@ -1,16 +1,28 @@
 """The real host client talks to the actual patched machine code in these tests."""
 import unittest
 
-from test_per_key_firmware import BASE, BUFFER, MODE, Machine, candidate
+from test_per_key_firmware import BASE, MODE, Machine, candidate
 from per_key_rgb import FirmwareError, PerKeyRGB, parse_assignment, parse_color, validate_frame
 
 
 class EmulatedHID:
     def __init__(self, image):
         self.machine = Machine(image)
+        self.pending = []
+
+    def write(self, request):
+        reply = self.machine.request(request)
+        if reply is not None:
+            self.pending.append(reply)
 
     def transact(self, request, timeout=2.0):
-        return self.machine.request(request)
+        self.write(request)
+        if not self.pending:
+            self.machine.boundary()
+            reply = self.machine.take_reply()
+            if reply is not None:
+                self.pending.append(reply)
+        return self.pending.pop(0) if self.pending else None
 
 
 class HostTests(unittest.TestCase):
@@ -24,8 +36,7 @@ class HostTests(unittest.TestCase):
         colors = [(i, 255-i, (3*i) & 255) for i in range(92)]
         client.write(0, colors)
         self.assertEqual(client.read(0, 92), colors)
-        self.assertEqual(bytes(hid.machine.cpu.mem_read(BUFFER, 276)),
-                         bytes(channel for rgb in colors for channel in rgb))
+        self.assertEqual(hid.machine.colors(), bytes(channel for rgb in colors for channel in rgb))
 
     def test_rejected_input_does_not_partially_update_a_frame(self):
         hid = EmulatedHID(candidate())
@@ -49,6 +60,27 @@ class HostTests(unittest.TestCase):
         self.assertFalse(client.info()['enabled'])
         self.assertEqual(client.read(0, 2), [(255,0,0), (0,255,0)])
         self.assertEqual(bytes(hid.machine.cpu.mem_read(MODE, 4)), bytes(4))
+
+    def test_incomplete_stream_cannot_replace_the_previous_frame(self):
+        hid = EmulatedHID(candidate())
+        client = PerKeyRGB(hid)
+        original = [(10, 20, 30)] * 92
+        client.write(0, original)
+        send = hid.write
+        hid.write = lambda packet: None if packet[:3] == bytes([7,127,3]) and packet[4] == 5 else send(packet)
+        with self.assertRaises(FirmwareError):
+            client.write(0, [(90, 80, 70)] * 92)
+        self.assertEqual(client.read(), original)
+
+    def test_enabled_stream_and_partial_update_preserve_other_leds(self):
+        hid = EmulatedHID(candidate())
+        client = PerKeyRGB(hid)
+        client.set_enabled(True)
+        original = [(i, 255-i, 0) for i in range(92)]
+        client.write(0, original)
+        client.write(91, [(7, 8, 9)])
+        self.assertEqual(client.read(), original[:91] + [(7, 8, 9)])
+        self.assertTrue(client.info()['enabled'])
 
     def test_color_and_assignment_boundaries(self):
         self.assertEqual(parse_color('#00FF80'), (0,255,128))
