@@ -1,0 +1,47 @@
+name: Test .NET SDK
+
+on:
+  push:
+    paths:
+      - "sdk/**"
+      - "tests/test_sdk_conformance.py"
+      - "tests/test_per_key_firmware.py"
+      - ".github/workflows/sdk-dotnet.yml"
+  pull_request:
+    paths:
+      - "sdk/**"
+      - "tests/test_sdk_conformance.py"
+      - "tests/test_per_key_firmware.py"
+      - ".github/workflows/sdk-dotnet.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore sdk/dotnet/Wobkey.Crush80.Sdk.sln
+      - run: dotnet test sdk/dotnet/Wobkey.Crush80.Sdk.sln -c Release --no-restore
+      - run: dotnet build sdk/dotnet/samples/Wobkey.Crush80.Sample/Wobkey.Crush80.Sample.csproj -c Release --no-restore
+      - run: dotnet pack sdk/dotnet/src/Wobkey.Crush80.Sdk/Wobkey.Crush80.Sdk.csproj -c Release --no-restore
+
+  firmware-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r tests/requirements.txt
+      - run: python -m unittest discover -s tests -p 'test_sdk_conformance.py' -v

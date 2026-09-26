@@ -22,46 +22,10 @@ installation, wire protocol, and verification status.
 
 ### C# RGB SDK
 
-The `sdk/dotnet/` solution provides `Wobkey.Crush80.Sdk` for applications using
-the wired per-key RGB firmware. An injected `IHidTransport` can be opened with
-`Crush80RgbSession.OpenAsync(transport)`; opening performs only a read-only PKRG
-capability handshake and rejects firmware that is not version 1 with 92 LEDs
-and eight LEDs per transfer. The session owns and closes the injected transport.
+The [.NET 10 SDK](sdk/dotnet/README.md) and [sample app](sdk/dotnet/samples/Wobkey.Crush80.Sample/) target the **wired** per-key v1.06 firmware (USB `320F:5055`, VIA usage page `0xFF60`, usage `0x61`). Discovery and opening perform no lighting writes; opening rejects devices without compatible PKRG v1 capabilities (92 LEDs, eight per transfer). The SDK provides explicit `session.Advanced` controls and an `AcquireControlAsync` lease that captures colors, override, brightness and effect before taking control.
 
-`session.Advanced` supports full-frame and range RGB writes, readback, override
-mode, OEM brightness/effect, and ordered state capture/restoration. Await each
-operation before changing its supplied memory. Session operations are serialized;
-after a timeout, malformed response, or transport failure, dispose and reopen
-the session instead of retrying on the faulted request stream.
+Run `dotnet run --project sdk/dotnet/samples/Wobkey.Crush80.Sample/Wobkey.Crush80.Sample.csproj -- --help` for non-writing usage, or `--list` for non-writing discovery. Only `--smoke` writes lighting: it requires typing `SMOKE` before opening, verifies a temporary Esc/F1 pattern through all-92 readback, and explicitly restores. **Do not run it without hardware authorization.** Close other keyboard controllers first. Frames are volatile, sequential/non-atomic, with no FPS guarantee; restoration after faults or disconnection cannot be guaranteed. Windows/Linux/macOS are implementation/CI targets, **not verified SDK hardware support**; see the SDK README for permissions, cancellation, restoration failures, package notices, and OS-specific smoke evidence requirements.
 
-Use `await session.AcquireControlAsync(initialFrame, options)` to temporarily take
-exclusive control of all 92 LEDs. The session first snapshots colors, override
-mode, brightness, and effect; it then disables the override, writes the initial
-frame, selects the requested hardware brightness (default 9) and effect 6, and
-enables the override. Only one control lease can be active. While it is active,
-`session.Advanced` reads remain available, but its mutations and state restoration
-are blocked. `await lease.RestoreAsync()` restores the snapshot in safe order;
-disposing the lease or the session restores it by default, even when another
-request is completing. Set `RgbControlOptions.RestoreStateOnDispose = false` to
-release ownership without restoring the snapshot. Session disposal always closes
-the transport; if restoration fails, it throws `StateRestoreException` after closure.
-The exception's `Failures` list names each failed step (`OverrideDisable`,
-`Colors`, `Brightness`, `Effect`, `OverrideEnable`). A firmware rejection allows
-safe later steps to continue; a timeout, malformed reply, or transport failure
-stops further requests and reports unattempted steps as `SessionFaultedException`.
-Cancellation takes effect before a request starts, never between its write and
-matching reply; a multi-request call can stop between complete requests.
-
-The lease provides `WriteFrameAsync`, `WriteRangeAsync`, `FillAsync`,
-`ReadFrameAsync`, and `SetHardwareBrightnessAsync` (0–9). Frame writes compare
-against the last acknowledged colors and transmit only changed eight-LED
-chunks; a rejected chunk is retried on the next write without resending
-acknowledged chunks. Range writes update only their supplied slots. Fill uses
-the same cached frame path. Reads return the raw 92-color device buffer,
-before hardware brightness scaling. Keep supplied write memory unchanged until
-the operation completes. Argument validation precedes queueing; complete
-lease operations share the session's serial gate, so concurrent writes, reads,
-fills, and brightness changes cannot interleave.
 
 ## The Problem
 
@@ -81,6 +45,8 @@ host/
   linux/                  OTA, VIA backup, and per-key RGB utilities
   windows/Crush80FirmwareInstaller/
                           Windows WPF firmware installer
+
+sdk/dotnet/               .NET 10 wired per-key SDK, sample, and tests
 
 plugins/signalrgb/
   wired/                  Wired keyboard plugin variants

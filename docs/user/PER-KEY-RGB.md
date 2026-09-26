@@ -405,6 +405,10 @@ has been measured. `read` returns supplied RGB values, before global
 brightness scaling; maximum firmware brightness is 192/256 of the supplied
 channel value. Black remains black, and neutral RGB values stay neutral.
 
+The [C#/.NET SDK and safe sample](../../sdk/dotnet/README.md) provide a separate
+wired per-key client. Their Windows/Linux/macOS builds and CI are hardware-free;
+the Python hardware evidence in this guide does not verify the SDK on any OS.
+
 ### Automated verification
 
 ```sh

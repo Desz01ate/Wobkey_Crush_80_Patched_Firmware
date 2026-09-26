@@ -9,8 +9,13 @@
     <Version>0.1.0</Version>
     <Authors>Wobkey Crush 80 Community</Authors>
     <Description>Managed SDK for the wired Wobkey Crush 80 per-key RGB firmware.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="HidSharp" Version="2.6.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="README.md" />
+    <None Include="THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>
