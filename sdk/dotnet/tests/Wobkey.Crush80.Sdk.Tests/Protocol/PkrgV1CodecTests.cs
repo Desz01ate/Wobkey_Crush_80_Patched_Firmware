@@ -1,4 +1,5 @@
 using Wobkey.Crush80.Protocol;
+using Wobkey.Crush80.Sdk.Tests.Support;
 
 namespace Wobkey.Crush80.Sdk.Tests.Protocol;
 
@@ -158,6 +159,10 @@ public sealed class PkrgV1CodecTests
 
         Assert.Equal(status, exception.Status);
         Assert.Equal("GetEnabled", exception.Operation);
+        if (status == 4)
+            Assert.Contains("incomplete or invalid frame", exception.Message);
+        if (status == 5)
+            Assert.Contains("commit/acknowledgement is pending", exception.Message);
     }
 
     [Fact]
@@ -224,6 +229,41 @@ public sealed class PkrgV1CodecTests
         Assert.Contains($"stream fragments={streamChunks}", error.Message);
         Assert.Contains("LEDs=92", error.Message);
         Assert.Contains("chunk limit=8", error.Message);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public void CapabilityStatusRejectsAsIncompatibleAfterHeaderValidation(byte status)
+    {
+        var response = Convert.FromBase64String("CH8AAFBLUkcCXAgACQsAAAAAAAAAAAAAAAAAAAAAAAA=");
+        response[3] = status;
+        var incompatible = Assert.Throws<IncompatibleFirmwareException>(
+            () => PkrgV1Codec.ParseCapabilitiesResponse(response));
+        Assert.Equal("GetCapabilities", incompatible.Operation);
+        Assert.Contains($"status {status}", incompatible.Message);
+
+        response[2] = 2;
+        Assert.Throws<ProtocolViolationException>(() => PkrgV1Codec.ParseCapabilitiesResponse(response));
+        Assert.Throws<ProtocolViolationException>(() => PkrgV1Codec.ParseCapabilitiesResponse(response[..31]));
+    }
+
+    [Fact]
+    public async Task FakeRejectsOversizedRawRgbChunkEvenWhenAdvertisedLimitIsLarger()
+    {
+        await using var transport = new FakeFirmwareTransport { ChunkLimit = 12 };
+        var request = new byte[32];
+        request[0] = 7;
+        request[1] = 0x7F;
+        request[2] = 2;
+        request[5] = 9;
+        var response = new byte[32];
+
+        await transport.WriteAsync(request);
+        await transport.ReadAsync(response, TimeSpan.FromSeconds(1));
+
+        Assert.Equal((byte)2, response[3]);
+        Assert.Equal(new Rgb24[92], transport.Colors);
     }
 
     [Fact]

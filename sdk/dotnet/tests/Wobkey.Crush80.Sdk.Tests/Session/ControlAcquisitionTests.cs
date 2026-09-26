@@ -95,4 +95,46 @@ public sealed class ControlAcquisitionTests
         Assert.Equal((byte)7, transport.Effect);
         await using var lease = await session.AcquireControlAsync(new Rgb24[92]);
     }
+
+    [Fact]
+    public async Task CancellationAfterSnapshotBeforeFirstSetSendsNoRestorationTraffic()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await using var transport = new FakeFirmwareTransport
+        {
+            CallerCancellation = cancellation, CancelCallerAfterResponse = "GetEffect"
+        };
+        await using var session = await Crush80RgbSession.OpenAsync(transport);
+        transport.DetailedOperations.Clear();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await session.AcquireControlAsync(new Rgb24[92], cancellationToken: cancellation.Token));
+
+        Assert.Equal(15, transport.DetailedOperations.Count);
+        Assert.Equal("GetEffect", transport.DetailedOperations[^1]);
+        Assert.DoesNotContain(transport.DetailedOperations, operation =>
+            operation.StartsWith("Set") || operation.StartsWith("WriteRgb"));
+    }
+
+    [Fact]
+    public async Task CancellationAfterAcknowledgedDisableRestoresSnapshot()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await using var transport = new FakeFirmwareTransport
+        {
+            Enabled = true, Brightness = 4, Effect = 7,
+            CallerCancellation = cancellation, CancelCallerAfterResponse = "SetEnabled"
+        };
+        await using var session = await Crush80RgbSession.OpenAsync(transport);
+        transport.DetailedOperations.Clear();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await session.AcquireControlAsync(new Rgb24[92], cancellationToken: cancellation.Token));
+
+        Assert.Equal(2, transport.DetailedOperations.Count(operation => operation == "SetEnabled:false"));
+        Assert.Equal("SetEnabled:true", transport.DetailedOperations[^1]);
+        Assert.True(transport.Enabled);
+        Assert.Equal((byte)4, transport.Brightness);
+        Assert.Equal((byte)7, transport.Effect);
+    }
 }

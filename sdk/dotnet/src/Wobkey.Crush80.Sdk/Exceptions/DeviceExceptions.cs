@@ -88,6 +88,8 @@ public sealed class FirmwareRejectedRequestException : Crush80SdkException
         1 => "The firmware rejected the request because the operation is unsupported (status 1).",
         2 => "The firmware rejected the request because the LED range is invalid (status 2).",
         3 => "The firmware rejected the request because the mode is invalid (status 3).",
+        4 => "The firmware rejected an incomplete or invalid frame (status 4).",
+        5 => "The firmware rejected the request because frame commit/acknowledgement is pending (status 5).",
         _ => $"The firmware rejected the request with unknown status {status}."
     };
 }

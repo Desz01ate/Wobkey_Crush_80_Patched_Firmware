@@ -23,13 +23,18 @@ public sealed class StateRestoreException : Crush80SdkException
     /// <summary>Initializes an exception with failures in restoration order.</summary>
     public StateRestoreException(
         IReadOnlyList<StateRestoreFailure> failures,
-        Exception? originalOperationFailure = null)
+        Exception? originalOperationFailure = null,
+        Exception? cleanupError = null)
         : base("The keyboard state could not be restored completely.",
             operation: "RestoreState", innerException: originalOperationFailure)
     {
-        Failures = failures.ToArray();
+        Failures = Array.AsReadOnly(failures.ToArray());
+        CleanupError = cleanupError;
     }
 
     /// <summary>Gets the restoration steps that failed or could not safely run.</summary>
     public IReadOnlyList<StateRestoreFailure> Failures { get; }
+
+    /// <summary>Gets the transport disposal error, if cleanup also failed.</summary>
+    public Exception? CleanupError { get; }
 }

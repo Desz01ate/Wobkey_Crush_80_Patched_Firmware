@@ -125,4 +125,24 @@ public sealed class FrameWriteTests
         Assert.Throws<ArgumentOutOfRangeException>(() => lease.SetHardwareBrightnessAsync(10));
         Assert.Empty(transport.Operations);
     }
+
+    [Fact]
+    public async Task DivergentReadDoesNotReplaceAcknowledgedWriteCache()
+    {
+        await using var transport = new FakeFirmwareTransport();
+        await using var session = await Crush80RgbSession.OpenAsync(transport);
+        await using var lease = await session.AcquireControlAsync(new Rgb24[92]);
+        var acknowledged = new Rgb24[92];
+        acknowledged[0] = new Rgb24(10, 20, 30);
+        await lease.WriteFrameAsync(acknowledged);
+        transport.Colors = new Rgb24[92];
+        var observed = new Rgb24[92];
+        await lease.ReadFrameAsync(observed);
+        Assert.Equal(new Rgb24[92], observed);
+        transport.DetailedOperations.Clear();
+
+        await lease.WriteFrameAsync(acknowledged);
+
+        Assert.Empty(transport.DetailedOperations);
+    }
 }

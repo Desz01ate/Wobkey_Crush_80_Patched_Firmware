@@ -111,4 +111,40 @@ public sealed class SessionCompatibilityTests
         Assert.True(transport.IsDisposed);
         Assert.Equal(new[] { "GetCapabilities" }, transport.Operations);
     }
+
+    [Fact]
+    public async Task RejectedCapabilityStatusIdentifiesDeviceAndClosesTransportWithoutMutation()
+    {
+        await using var transport = new FakeFirmwareTransport { RejectNextStatus = 1 };
+
+        var error = await Assert.ThrowsAsync<IncompatibleFirmwareException>(async () =>
+            await Crush80RgbSession.OpenAsync(transport));
+
+        Assert.Same(transport.Device, error.Device);
+        Assert.Equal("GetCapabilities", error.Operation);
+        Assert.Contains("status 1", error.Message);
+        Assert.Equal(new[] { "GetCapabilities" }, transport.Operations);
+        Assert.True(transport.IsDisposed);
+    }
+
+    [Fact]
+    public async Task FirmwareRejectionAndMalformedReplyIdentifyExactDevice()
+    {
+        await using var transport = new FakeFirmwareTransport();
+        await using var session = await Crush80RgbSession.OpenAsync(transport);
+        transport.RejectNextStatus = 5;
+
+        var rejected = await Assert.ThrowsAsync<FirmwareRejectedRequestException>(async () =>
+            await session.Advanced.GetEnabledAsync());
+        Assert.Same(transport.Device, rejected.Device);
+        Assert.Equal("GetEnabled", rejected.Operation);
+        Assert.Equal((byte)5, rejected.Status);
+        Assert.Contains("pending", rejected.Message);
+
+        transport.MalformOperationOnce = "GetEnabled";
+        var malformed = await Assert.ThrowsAsync<ProtocolViolationException>(async () =>
+            await session.Advanced.GetEnabledAsync());
+        Assert.Same(transport.Device, malformed.Device);
+        Assert.Equal("GetEnabled", malformed.Operation);
+    }
 }

@@ -14,6 +14,8 @@ class SdkConformanceTests(unittest.TestCase):
         self.assertEqual(corpus["schemaVersion"], 1)
         self.assertEqual(corpus["protocol"], "PKRG")
         self.assertEqual(corpus["protocolVersion"], 1)
+        self.assertEqual(corpus["ledCount"], 92)
+        self.assertEqual(corpus["chunkLimit"], 8)
 
         for case in corpus["protocolCases"]:
             with self.subTest(case=case["name"]):

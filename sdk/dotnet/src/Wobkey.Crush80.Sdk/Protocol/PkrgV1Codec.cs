@@ -25,9 +25,13 @@ internal static class PkrgV1Codec
         Start(destination, GetCommand, Channel, operation: 0);
     }
 
-    internal static PerKeyRgbCapabilities ParseCapabilitiesResponse(ReadOnlySpan<byte> response)
+    internal static PerKeyRgbCapabilities ParseCapabilitiesResponse(ReadOnlySpan<byte> response, Crush80DeviceDescriptor? device = null)
     {
-        ValidatePkrgResponse(response, GetCommand, Channel, 0, "GetCapabilities");
+        ValidateResponseHeader(response, GetCommand, Channel, 0, "GetCapabilities", device);
+        if (response[3] != 0)
+            throw new IncompatibleFirmwareException(
+                $"The firmware rejected PKRG capabilities (status {response[3]}).",
+                operation: "GetCapabilities", device: device);
 
         var signatureMatches = response[4] == (byte)'P' && response[5] == (byte)'K' &&
             response[6] == (byte)'R' && response[7] == (byte)'G';
@@ -43,7 +47,7 @@ internal static class PkrgV1Codec
                 $"received signature={(signatureMatches ? "PKRG" : "invalid")}, version={version}, " +
                 $"LEDs={response[9]}, chunk limit={response[10]}, enabled={response[11]}, " +
                 $"stream LEDs={streamLeds}, stream fragments={streamChunks}.",
-                operation: "GetCapabilities");
+                operation: "GetCapabilities", device: device);
         }
 
         return new PerKeyRgbCapabilities(version, LedCount, ChunkLimit, response[11] == 1)
@@ -58,12 +62,12 @@ internal static class PkrgV1Codec
         Start(destination, GetCommand, Channel, ModeOperation);
     }
 
-    internal static bool ParseModeGetResponse(ReadOnlySpan<byte> response)
+    internal static bool ParseModeGetResponse(ReadOnlySpan<byte> response, Crush80DeviceDescriptor? device = null)
     {
-        ValidatePkrgResponse(response, GetCommand, Channel, ModeOperation, "GetEnabled");
+        ValidatePkrgResponse(response, GetCommand, Channel, ModeOperation, "GetEnabled", device);
         var enabled = response[4];
         if (enabled > 1)
-            throw InvalidResponse("The firmware returned an invalid enabled flag.", "GetEnabled");
+            throw InvalidResponse("The firmware returned an invalid enabled flag.", "GetEnabled", device);
 
         return enabled == 1;
     }
@@ -74,12 +78,12 @@ internal static class PkrgV1Codec
         destination[4] = enabled ? (byte)1 : (byte)0;
     }
 
-    internal static void ParseModeSetResponse(ReadOnlySpan<byte> response, bool expectedEnabled)
+    internal static void ParseModeSetResponse(ReadOnlySpan<byte> response, bool expectedEnabled, Crush80DeviceDescriptor? device = null)
     {
-        ValidatePkrgResponse(response, SetCommand, Channel, ModeOperation, "SetEnabled");
+        ValidatePkrgResponse(response, SetCommand, Channel, ModeOperation, "SetEnabled", device);
         var expected = expectedEnabled ? (byte)1 : (byte)0;
         if (response[4] > 1 || response[4] != expected)
-            throw InvalidResponse("The mode acknowledgement did not match the requested enabled state.", "SetEnabled");
+            throw InvalidResponse("The mode acknowledgement did not match the requested enabled state.", "SetEnabled", device);
     }
 
     internal static void WriteRgbGetRequest(Span<byte> destination, int startIndex, int count)
@@ -96,14 +100,15 @@ internal static class PkrgV1Codec
     internal static void ParseRgbGetResponse(
         ReadOnlySpan<byte> response,
         int expectedStartIndex,
-        Span<Rgb24> destination)
+        Span<Rgb24> destination,
+        Crush80DeviceDescriptor? device = null)
     {
         ValidateRange(expectedStartIndex, destination.Length);
         if (destination.Length > ChunkLimit)
             throw new ArgumentOutOfRangeException(nameof(destination), $"A PKRG transfer cannot exceed {ChunkLimit} LEDs.");
 
-        ValidatePkrgResponse(response, GetCommand, Channel, RgbOperation, "ReadRgb");
-        ValidateRgbEcho(response, expectedStartIndex, destination.Length, "ReadRgb");
+        ValidatePkrgResponse(response, GetCommand, Channel, RgbOperation, "ReadRgb", device);
+        ValidateRgbEcho(response, expectedStartIndex, destination.Length, "ReadRgb", device);
 
         for (var index = 0; index < destination.Length; index++)
         {
@@ -136,21 +141,22 @@ internal static class PkrgV1Codec
     internal static void ParseRgbSetResponse(
         ReadOnlySpan<byte> response,
         int expectedStartIndex,
-        ReadOnlySpan<Rgb24> expectedColors)
+        ReadOnlySpan<Rgb24> expectedColors,
+        Crush80DeviceDescriptor? device = null)
     {
         ValidateRange(expectedStartIndex, expectedColors.Length);
         if (expectedColors.Length > ChunkLimit)
             throw new ArgumentOutOfRangeException(nameof(expectedColors), $"A PKRG transfer cannot exceed {ChunkLimit} LEDs.");
 
-        ValidatePkrgResponse(response, SetCommand, Channel, RgbOperation, "WriteRgb");
-        ValidateRgbEcho(response, expectedStartIndex, expectedColors.Length, "WriteRgb");
+        ValidatePkrgResponse(response, SetCommand, Channel, RgbOperation, "WriteRgb", device);
+        ValidateRgbEcho(response, expectedStartIndex, expectedColors.Length, "WriteRgb", device);
 
         for (var index = 0; index < expectedColors.Length; index++)
         {
             var offset = 6 + index * 3;
             var color = expectedColors[index];
             if (response[offset] != color.Red || response[offset + 1] != color.Green || response[offset + 2] != color.Blue)
-                throw InvalidResponse("The RGB acknowledgement did not match the requested colors.", "WriteRgb");
+                throw InvalidResponse("The RGB acknowledgement did not match the requested colors.", "WriteRgb", device);
         }
     }
 
@@ -159,12 +165,12 @@ internal static class PkrgV1Codec
         Start(destination, GetCommand, OemChannel, BrightnessId);
     }
 
-    internal static byte ParseBrightnessGetResponse(ReadOnlySpan<byte> response)
+    internal static byte ParseBrightnessGetResponse(ReadOnlySpan<byte> response, Crush80DeviceDescriptor? device = null)
     {
-        ValidateOemResponse(response, GetCommand, BrightnessId, "GetBrightness");
+        ValidateOemResponse(response, GetCommand, BrightnessId, "GetBrightness", device);
         var brightness = response[3];
         if (brightness > MaximumBrightness)
-            throw InvalidResponse("The firmware returned an invalid hardware brightness.", "GetBrightness");
+            throw InvalidResponse("The firmware returned an invalid hardware brightness.", "GetBrightness", device);
 
         return brightness;
     }
@@ -176,12 +182,12 @@ internal static class PkrgV1Codec
         destination[3] = brightness;
     }
 
-    internal static byte ParseBrightnessSetResponse(ReadOnlySpan<byte> response, byte expectedBrightness)
+    internal static byte ParseBrightnessSetResponse(ReadOnlySpan<byte> response, byte expectedBrightness, Crush80DeviceDescriptor? device = null)
     {
         ValidateBrightness(expectedBrightness);
-        ValidateOemResponse(response, SetCommand, BrightnessId, "SetBrightness");
+        ValidateOemResponse(response, SetCommand, BrightnessId, "SetBrightness", device);
         if (response[3] != expectedBrightness)
-            throw InvalidResponse("The brightness acknowledgement did not match the requested value.", "SetBrightness");
+            throw InvalidResponse("The brightness acknowledgement did not match the requested value.", "SetBrightness", device);
 
         return response[3];
     }
@@ -191,12 +197,12 @@ internal static class PkrgV1Codec
         Start(destination, GetCommand, OemChannel, EffectId);
     }
 
-    internal static byte ParseEffectGetResponse(ReadOnlySpan<byte> response)
+    internal static byte ParseEffectGetResponse(ReadOnlySpan<byte> response, Crush80DeviceDescriptor? device = null)
     {
-        ValidateOemResponse(response, GetCommand, EffectId, "GetEffect");
+        ValidateOemResponse(response, GetCommand, EffectId, "GetEffect", device);
         var effect = response[3];
         if (effect > MaximumEffect)
-            throw InvalidResponse("The firmware returned an invalid effect identifier.", "GetEffect");
+            throw InvalidResponse("The firmware returned an invalid effect identifier.", "GetEffect", device);
 
         return effect;
     }
@@ -208,12 +214,12 @@ internal static class PkrgV1Codec
         destination[3] = effect;
     }
 
-    internal static byte ParseEffectSetResponse(ReadOnlySpan<byte> response, byte expectedEffect)
+    internal static byte ParseEffectSetResponse(ReadOnlySpan<byte> response, byte expectedEffect, Crush80DeviceDescriptor? device = null)
     {
         ValidateEffect(expectedEffect);
-        ValidateOemResponse(response, SetCommand, EffectId, "SetEffect");
+        ValidateOemResponse(response, SetCommand, EffectId, "SetEffect", device);
         if (response[3] != expectedEffect)
-            throw InvalidResponse("The effect acknowledgement did not match the requested value.", "SetEffect");
+            throw InvalidResponse("The effect acknowledgement did not match the requested value.", "SetEffect", device);
 
         return response[3];
     }
@@ -254,22 +260,24 @@ internal static class PkrgV1Codec
         byte expectedCommand,
         byte expectedChannel,
         byte expectedOperation,
-        string operation)
+        string operation,
+        Crush80DeviceDescriptor? device)
     {
-        ValidateResponseHeader(response, expectedCommand, expectedChannel, expectedOperation, operation);
+        ValidateResponseHeader(response, expectedCommand, expectedChannel, expectedOperation, operation, device);
         // v2 can also return status 5 for mode/chunk SET while a commit/ACK is pending;
         // all nonzero PKRG statuses, including v2's 4/5, remain firmware rejections.
         if (response[3] != 0)
-            throw new FirmwareRejectedRequestException(response[3], operation);
+            throw new FirmwareRejectedRequestException(response[3], operation, device);
     }
 
     private static void ValidateOemResponse(
         ReadOnlySpan<byte> response,
         byte expectedCommand,
         byte expectedOperation,
-        string operation)
+        string operation,
+        Crush80DeviceDescriptor? device)
     {
-        ValidateResponseHeader(response, expectedCommand, OemChannel, expectedOperation, operation);
+        ValidateResponseHeader(response, expectedCommand, OemChannel, expectedOperation, operation, device);
     }
 
     private static void ValidateResponseHeader(
@@ -277,21 +285,22 @@ internal static class PkrgV1Codec
         byte expectedCommand,
         byte expectedChannel,
         byte expectedOperation,
-        string operation)
+        string operation,
+        Crush80DeviceDescriptor? device)
     {
         if (response.Length != PayloadLength)
-            throw InvalidResponse("A VIA response must contain exactly 32 bytes.", operation);
+            throw InvalidResponse("A VIA response must contain exactly 32 bytes.", operation, device);
 
         if (response[0] != expectedCommand || response[1] != expectedChannel || response[2] != expectedOperation)
-            throw InvalidResponse("The VIA response command, channel, or operation did not match the request.", operation);
+            throw InvalidResponse("The VIA response command, channel, or operation did not match the request.", operation, device);
     }
 
-    private static void ValidateRgbEcho(ReadOnlySpan<byte> response, int startIndex, int count, string operation)
+    private static void ValidateRgbEcho(ReadOnlySpan<byte> response, int startIndex, int count, string operation, Crush80DeviceDescriptor? device)
     {
         if (response[4] != startIndex || response[5] != count)
-            throw InvalidResponse("The RGB response returned a different LED range.", operation);
+            throw InvalidResponse("The RGB response returned a different LED range.", operation, device);
     }
 
-    private static ProtocolViolationException InvalidResponse(string message, string operation) =>
-        new(message, operation);
+    private static ProtocolViolationException InvalidResponse(string message, string operation, Crush80DeviceDescriptor? device) =>
+        new(message, operation, device);
 }

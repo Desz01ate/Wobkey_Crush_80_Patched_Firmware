@@ -121,10 +121,10 @@ public sealed class RgbControlLease : IAsyncDisposable
     }
 
     /// <summary>Restores the original RGB state and releases exclusive control.</summary>
-    public ValueTask RestoreAsync()
+    public ValueTask RestoreAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfRestored();
-        return _session.RestoreLeaseAsync(this, restore: true);
+        return _session.RestoreLeaseAsync(this, restore: true, cancellationToken);
     }
 
     /// <summary>Releases this lease, restoring the snapshot unless the options opted out.</summary>

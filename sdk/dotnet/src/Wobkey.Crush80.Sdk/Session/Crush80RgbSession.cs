@@ -50,10 +50,12 @@ public sealed class Crush80RgbSession : IAsyncDisposable
             var brightness = await client.GetBrightnessAsync(token).ConfigureAwait(false);
             var effect = await client.GetEffectAsync(token).ConfigureAwait(false);
             var saved = RgbDeviceState.FromCapturedFrame(colors, enabled, brightness, effect);
+            var firstMutationCompleted = false;
 
             try
             {
                 await client.SetEnabledAsync(false, token).ConfigureAwait(false);
+                firstMutationCompleted = true;
                 await client.WriteRangeAsync(0, frame, token).ConfigureAwait(false);
                 await client.SetBrightnessAsync(options.HardwareBrightness, token).ConfigureAwait(false);
                 await client.SetEffectAsync(6, token).ConfigureAwait(false);
@@ -63,6 +65,8 @@ public sealed class Crush80RgbSession : IAsyncDisposable
             {
                 if (acquisitionError is not FirmwareRejectedRequestException and not OperationCanceledException)
                     Volatile.Write(ref _fault, acquisitionError);
+                if (acquisitionError is OperationCanceledException && !firstMutationCompleted)
+                    throw;
                 try
                 {
                     await RestoreStateCoreAsync(client, saved, CancellationToken.None).ConfigureAwait(false);
@@ -78,14 +82,14 @@ public sealed class Crush80RgbSession : IAsyncDisposable
         }, cancellationToken, requireNoLease: true);
     }
 
-    internal ValueTask RestoreLeaseAsync(RgbControlLease lease, bool restore) =>
+    internal ValueTask RestoreLeaseAsync(RgbControlLease lease, bool restore, CancellationToken cancellationToken = default) =>
         ExecuteAsync("RestoreState", async (client, token) =>
         {
             if (restore)
                 await RestoreStateCoreAsync(client, lease.SavedState, token, lease).ConfigureAwait(false);
             _activeLease = null;
             lease.MarkRestored();
-        }, CancellationToken.None, expectedLease: lease, allowFaulted: true);
+        }, cancellationToken, expectedLease: lease, allowFaulted: true);
 
     private static readonly string[] RestorationFields =
         ["OverrideDisable", "Colors", "Brightness", "Effect", "OverrideEnable"];
@@ -97,6 +101,7 @@ public sealed class Crush80RgbSession : IAsyncDisposable
         var colorsRestored = false;
         for (var step = 0; step < RestorationFields.Length; step++)
         {
+            token.ThrowIfCancellationRequested();
             if (Volatile.Read(ref _fault) is { } fault)
             {
                 (failures ??= []).Add(new StateRestoreFailure(RestorationFields[step],
@@ -278,23 +283,39 @@ public sealed class Crush80RgbSession : IAsyncDisposable
         await _operationGate.WaitAsync().ConfigureAwait(false);
         try
         {
+            Exception? restorationError = null;
+            Exception? cleanupError = null;
             try
             {
-                if (_activeLease is { } lease)
-                {
-                    if (lease.RestoreStateOnDispose)
-                        await RestoreStateCoreAsync(_client, lease.SavedState, CancellationToken.None, lease)
-                            .ConfigureAwait(false);
-                    _activeLease = null;
-                    lease.MarkRestored();
-                }
+                if (_activeLease is { } lease && lease.RestoreStateOnDispose)
+                    await RestoreStateCoreAsync(_client, lease.SavedState, CancellationToken.None, lease)
+                        .ConfigureAwait(false);
+            }
+            catch (Exception error)
+            {
+                restorationError = error;
             }
             finally
             {
                 _activeLease?.MarkRestored();
                 _activeLease = null;
+            }
+
+            try
+            {
                 await _transport.DisposeAsync().ConfigureAwait(false);
             }
+            catch (Exception error)
+            {
+                cleanupError = error;
+            }
+
+            if (restorationError is StateRestoreException restore && cleanupError is not null)
+                throw new StateRestoreException(restore.Failures, restore.InnerException, cleanupError);
+            if (restorationError is not null)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(restorationError).Throw();
+            if (cleanupError is not null)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(cleanupError).Throw();
         }
         finally
         {

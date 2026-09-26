@@ -32,6 +32,8 @@ internal sealed class FakeFirmwareTransport : IHidTransport
     internal bool PauseAfterWrite { get; set; }
     internal bool CancelCallerAfterNextWrite { get; set; }
     internal CancellationTokenSource? CallerCancellation { get; set; }
+    internal string? CancelCallerAfterResponse { get; set; }
+    internal Exception? DisposalError { get; set; }
     internal int PendingReplyCount => _hasPending ? 1 : 0;
     internal bool IsDisposed { get; private set; }
     internal Task FirstWriteObserved => _firstWriteObserved.Task;
@@ -132,6 +134,11 @@ internal sealed class FakeFirmwareTransport : IHidTransport
             MalformOperationOnce = null;
         }
         _hasPending = false;
+        if (CancelCallerAfterResponse == operation)
+        {
+            CancelCallerAfterResponse = null;
+            CallerCancellation?.Cancel();
+        }
         return ValueTask.CompletedTask;
     }
 
@@ -158,7 +165,7 @@ internal sealed class FakeFirmwareTransport : IHidTransport
                     RejectRgbWriteStartOnce = null;
                 return 2;
             }
-            if (count == 0 || count > ChunkLimit || start + count > LedCount || start + count > _colors.Length)
+            if (count == 0 || count > 8 || count > ChunkLimit || start + count > LedCount || start + count > _colors.Length)
                 return 2;
         }
         return 0;
@@ -237,6 +244,8 @@ internal sealed class FakeFirmwareTransport : IHidTransport
     public ValueTask DisposeAsync()
     {
         IsDisposed = true;
+        if (DisposalError is { } error)
+            throw error;
         return ValueTask.CompletedTask;
     }
 }

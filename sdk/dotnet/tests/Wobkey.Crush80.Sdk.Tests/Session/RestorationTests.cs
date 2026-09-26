@@ -123,4 +123,46 @@ public sealed class RestorationTests
         await lease.RestoreAsync();
         Assert.Equal(new Rgb24(2, 4, 6), transport.Colors[0]);
     }
+
+    [Fact]
+    public async Task ExplicitRestorePreCancelledMakesNoWritesAndKeepsLeaseActive()
+    {
+        await using var transport = new FakeFirmwareTransport();
+        await using var session = await Crush80RgbSession.OpenAsync(transport);
+        var lease = await session.AcquireControlAsync(new Rgb24[92]);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        transport.DetailedOperations.Clear();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await lease.RestoreAsync(cancellation.Token));
+
+        Assert.Empty(transport.DetailedOperations);
+        Assert.True(lease.Enabled);
+        await lease.RestoreAsync();
+        Assert.Throws<ObjectDisposedException>(() => _ = lease.Enabled);
+    }
+
+    [Fact]
+    public async Task ExplicitRestoreCancellationBetweenAcknowledgedStepsCanRetry()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await using var transport = new FakeFirmwareTransport
+        {
+            Enabled = true, CallerCancellation = cancellation
+        };
+        await using var session = await Crush80RgbSession.OpenAsync(transport);
+        var lease = await session.AcquireControlAsync(new Rgb24[92]);
+        transport.CancelCallerAfterResponse = "SetEnabled";
+        transport.DetailedOperations.Clear();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await lease.RestoreAsync(cancellation.Token));
+
+        Assert.Equal(new[] { "SetEnabled:false" }, transport.DetailedOperations);
+        Assert.False(lease.Enabled);
+        await lease.RestoreAsync();
+        Assert.True(transport.Enabled);
+        Assert.Throws<ObjectDisposedException>(() => _ = lease.Enabled);
+    }
 }

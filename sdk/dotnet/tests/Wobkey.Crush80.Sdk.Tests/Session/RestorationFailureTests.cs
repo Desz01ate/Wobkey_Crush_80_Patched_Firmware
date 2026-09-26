@@ -161,4 +161,77 @@ public sealed class RestorationFailureTests
         Assert.True(transport.IsDisposed);
         Assert.Equal((byte)9, transport.Brightness);
     }
+
+    [Fact]
+    public async Task DisposalErrorAlonePropagatesAndRepeatedCallsShareIt()
+    {
+        var cleanup = new IOException("transport cleanup failed");
+        var transport = new FakeFirmwareTransport { DisposalError = cleanup };
+        var session = await Crush80RgbSession.OpenAsync(transport);
+        var first = session.DisposeAsync().AsTask();
+        var second = session.DisposeAsync().AsTask();
+
+        Assert.Same(cleanup, await Assert.ThrowsAsync<IOException>(async () => await first));
+        Assert.Same(first, second);
+        Assert.Same(cleanup, await Assert.ThrowsAsync<IOException>(async () => await second));
+        Assert.True(transport.IsDisposed);
+    }
+
+    [Fact]
+    public async Task RestorationAndTransportFailuresRetainBothCausesAndReadOnlyFailures()
+    {
+        var cleanup = new IOException("transport cleanup failed");
+        var transport = new FakeFirmwareTransport
+        {
+            Enabled = true, DisposalError = cleanup
+        };
+        var session = await Crush80RgbSession.OpenAsync(transport);
+        await session.AcquireControlAsync(new Rgb24[92]);
+        transport.RejectModeValueOnce = false;
+        var first = session.DisposeAsync().AsTask();
+        var second = session.DisposeAsync().AsTask();
+
+        var error = await Assert.ThrowsAsync<StateRestoreException>(async () => await first);
+        Assert.Equal("OverrideDisable", Assert.Single(error.Failures).Field);
+        Assert.Null(error.InnerException);
+        Assert.Same(cleanup, error.CleanupError);
+        Assert.False(error.Failures is StateRestoreFailure[]);
+        Assert.Same(first, second);
+        Assert.Same(error, await Assert.ThrowsAsync<StateRestoreException>(async () => await second));
+        Assert.True(transport.IsDisposed);
+    }
+
+    [Fact]
+    public async Task RestorationFailureWithoutTransportFailureHasNoCleanupError()
+    {
+        var transport = new FakeFirmwareTransport { Enabled = true };
+        var session = await Crush80RgbSession.OpenAsync(transport);
+        await session.AcquireControlAsync(new Rgb24[92]);
+        transport.RejectModeValueOnce = false;
+
+        var error = await Assert.ThrowsAsync<StateRestoreException>(async () => await session.DisposeAsync());
+
+        Assert.Equal("OverrideDisable", Assert.Single(error.Failures).Field);
+        Assert.Null(error.CleanupError);
+        Assert.True(transport.IsDisposed);
+    }
+
+    [Fact]
+    public void RestorationExceptionDefensivelyCopiesFailuresAndRetainsOriginalCause()
+    {
+        var original = new IOException("initial operation failed");
+        var failure = new StateRestoreFailure("Colors", new IOException("restore failed"));
+        var cleanup = new IOException("cleanup failed");
+        var source = new[] { failure };
+
+        var error = new StateRestoreException(source, original, cleanup);
+        source[0] = new StateRestoreFailure("Effect", original);
+
+        Assert.Same(original, error.InnerException);
+        Assert.Same(failure, Assert.Single(error.Failures));
+        Assert.False(error.Failures is StateRestoreFailure[]);
+        Assert.Throws<NotSupportedException>(() =>
+            ((IList<StateRestoreFailure>)error.Failures)[0] = new StateRestoreFailure("Effect", original));
+        Assert.Same(cleanup, error.CleanupError);
+    }
 }

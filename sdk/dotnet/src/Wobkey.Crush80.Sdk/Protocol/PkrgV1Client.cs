@@ -20,21 +20,21 @@ internal sealed class PkrgV1Client
     {
         PkrgV1Codec.WriteCapabilitiesRequest(_request);
         await ExchangeAsync("GetCapabilities", cancellationToken).ConfigureAwait(false);
-        return PkrgV1Codec.ParseCapabilitiesResponse(_response);
+        return PkrgV1Codec.ParseCapabilitiesResponse(_response, _transport.Device);
     }
 
     internal async ValueTask<bool> GetEnabledAsync(CancellationToken cancellationToken)
     {
         PkrgV1Codec.WriteModeGetRequest(_request);
         await ExchangeAsync("GetEnabled", cancellationToken).ConfigureAwait(false);
-        return PkrgV1Codec.ParseModeGetResponse(_response);
+        return PkrgV1Codec.ParseModeGetResponse(_response, _transport.Device);
     }
 
     internal async ValueTask SetEnabledAsync(bool enabled, CancellationToken cancellationToken)
     {
         PkrgV1Codec.WriteModeSetRequest(_request, enabled);
         await ExchangeAsync("SetEnabled", cancellationToken).ConfigureAwait(false);
-        PkrgV1Codec.ParseModeSetResponse(_response, enabled);
+        PkrgV1Codec.ParseModeSetResponse(_response, enabled, _transport.Device);
     }
 
     internal async ValueTask ReadRangeAsync(int startIndex, Memory<Rgb24> destination, CancellationToken cancellationToken)
@@ -45,7 +45,7 @@ internal sealed class PkrgV1Client
             var count = Math.Min(PkrgV1Codec.ChunkLimit, destination.Length - offset);
             PkrgV1Codec.WriteRgbGetRequest(_request, startIndex + offset, count);
             await ExchangeAsync("ReadRgb", cancellationToken).ConfigureAwait(false);
-            PkrgV1Codec.ParseRgbGetResponse(_response, startIndex + offset, destination.Span.Slice(offset, count));
+            PkrgV1Codec.ParseRgbGetResponse(_response, startIndex + offset, destination.Span.Slice(offset, count), _transport.Device);
             offset += count;
         }
     }
@@ -58,7 +58,7 @@ internal sealed class PkrgV1Client
             var count = Math.Min(PkrgV1Codec.ChunkLimit, colors.Length - offset);
             PkrgV1Codec.WriteRgbSetRequest(_request, startIndex + offset, colors.Span.Slice(offset, count));
             await ExchangeAsync("WriteRgb", cancellationToken).ConfigureAwait(false);
-            PkrgV1Codec.ParseRgbSetResponse(_response, startIndex + offset, colors.Span.Slice(offset, count));
+            PkrgV1Codec.ParseRgbSetResponse(_response, startIndex + offset, colors.Span.Slice(offset, count), _transport.Device);
             offset += count;
         }
     }
@@ -67,28 +67,28 @@ internal sealed class PkrgV1Client
     {
         PkrgV1Codec.WriteBrightnessGetRequest(_request);
         await ExchangeAsync("GetBrightness", cancellationToken).ConfigureAwait(false);
-        return PkrgV1Codec.ParseBrightnessGetResponse(_response);
+        return PkrgV1Codec.ParseBrightnessGetResponse(_response, _transport.Device);
     }
 
     internal async ValueTask SetBrightnessAsync(byte brightness, CancellationToken cancellationToken)
     {
         PkrgV1Codec.WriteBrightnessSetRequest(_request, brightness);
         await ExchangeAsync("SetBrightness", cancellationToken).ConfigureAwait(false);
-        PkrgV1Codec.ParseBrightnessSetResponse(_response, brightness);
+        PkrgV1Codec.ParseBrightnessSetResponse(_response, brightness, _transport.Device);
     }
 
     internal async ValueTask<byte> GetEffectAsync(CancellationToken cancellationToken)
     {
         PkrgV1Codec.WriteEffectGetRequest(_request);
         await ExchangeAsync("GetEffect", cancellationToken).ConfigureAwait(false);
-        return PkrgV1Codec.ParseEffectGetResponse(_response);
+        return PkrgV1Codec.ParseEffectGetResponse(_response, _transport.Device);
     }
 
     internal async ValueTask SetEffectAsync(byte effect, CancellationToken cancellationToken)
     {
         PkrgV1Codec.WriteEffectSetRequest(_request, effect);
         await ExchangeAsync("SetEffect", cancellationToken).ConfigureAwait(false);
-        PkrgV1Codec.ParseEffectSetResponse(_response, effect);
+        PkrgV1Codec.ParseEffectSetResponse(_response, effect, _transport.Device);
     }
 
     private async ValueTask ExchangeAsync(string operation, CancellationToken cancellationToken)
