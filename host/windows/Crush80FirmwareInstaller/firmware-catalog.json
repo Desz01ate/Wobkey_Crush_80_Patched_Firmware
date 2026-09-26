@@ -1,6 +1,6 @@
 {
   "productName": "Wobkey Crush 80 Firmware Installer",
-  "supportMessage": "Use a direct wired USB connection. Do not unplug the keyboard until the installer reports completion.",
+  "supportMessage": "Use a direct wired USB connection. Do not unplug the keyboard until the installer reports completion. Complete corresponding firmware source is unavailable; bundled binaries are retained temporarily and are not represented as GPLv2-compliant. See firmware/GPL-COMPLIANCE.md.",
   "devices": [
     {
       "id": "crush80-wired",

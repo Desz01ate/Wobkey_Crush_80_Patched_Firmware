@@ -16,6 +16,7 @@
 
     <ItemGroup>
         <None Update="firmware-catalog.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+        <None Include="..\..\..\firmware\GPL-COMPLIANCE.md" Link="firmware\GPL-COMPLIANCE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
         <None Include="..\..\..\firmware\releases\v1.06\v2_patched.bin" Link="firmware\v2_patched.bin" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
         <None Include="..\..\..\firmware\releases\v1.04\firmware_patched.bin" Link="firmware\firmware_patched.bin" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
         <None Include="..\..\..\plugins\signalrgb\wired\WobkeyCrush80.js" Link="SignalRGB\WobkeyCrush80.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />

@@ -1,5 +1,7 @@
 # Wobkey Crush 80: per-key RGB
 
+> **Licensing:** Complete corresponding source for the QMK-derived Wobkey firmware is not available. Retained stock and patched binaries are not represented as GPLv2-compliant distributions. See [`firmware/GPL-COMPLIANCE.md`](../../firmware/GPL-COMPLIANCE.md). The community patch builders are GPL-2.0-only.
+
 ## Conclusion
 
 **Host-controlled per-key RGB is working on the physical keyboard over USB.**
@@ -300,6 +302,9 @@ Valid RGB ranges satisfy `1 <= count <= 8`, `start < 92`, and
 nor writes exceed the 32-byte report. Capability discovery is read-only; a
 host must require the signature/version/count before attempting custom SETs.
 
+The shared corpus at `sdk/conformance/pkrg-v1.json` is the cross-language
+observable contract.
+
 ### Implementation plan
 
 **Goal:** host-supplied wired USB per-key colors with deterministic startup,
@@ -401,6 +406,10 @@ Uploads are chunked, not atomically double-buffered. No frame-rate guarantee
 has been measured. `read` returns supplied RGB values, before global
 brightness scaling; maximum firmware brightness is 192/256 of the supplied
 channel value. Black remains black, and neutral RGB values stay neutral.
+
+The [C#/.NET SDK and safe sample](../../sdk/dotnet/README.md) provide a separate
+wired per-key client. Their Windows/Linux/macOS builds and CI are hardware-free;
+the Python hardware evidence in this guide does not verify the SDK on any OS.
 
 ### Automated verification
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2026 Wobkey Crush 80 firmware patch contributors
+# Community-authored patch tooling; does not relicense the input firmware.
 """
 Wobkey Crush 80 Firmware v2 (v1.06) Hue Fix Patch
 

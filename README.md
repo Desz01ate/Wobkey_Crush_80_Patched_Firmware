@@ -2,6 +2,8 @@
 
 The Wobkey Crush 80 (VID `0x320F`, PID `0x5055`) ships with a firmware bug: setting the hue (H byte) via the VIA USB protocol has no effect on the displayed color. This repository contains a binary patch that fixes the bug and a custom SignalRGB plugin that syncs the keyboard's backlight color to SignalRGB effects.
 
+> **Firmware licensing notice:** QMK identifies WOBKEY firmware as GPLv2-derived without complete corresponding source. This repository currently retains extracted and patched binaries temporarily, but does **not** claim that their distribution is GPLv2-compliant. The community patch tooling is GPL-2.0-only. See [`firmware/GPL-COMPLIANCE.md`](firmware/GPL-COMPLIANCE.md).
+
 ## Per-key RGB (v1.06)
 
 The per-key patch, Linux host tool, and wired SignalRGB V3 plugin are documented
@@ -19,6 +21,19 @@ installation, wire protocol, and verification status.
 - Windows installer project: `host/windows/Crush80FirmwareInstaller/` includes the
   optional per-key v1.06 firmware and both V3 plugin installers. Wireless V3
   support remains experimental and unverified.
+
+### C# RGB SDK
+
+The [.NET 10 SDK](sdk/dotnet/README.md) and [sample app](sdk/dotnet/samples/Wobkey.Crush80.Sample/) target **wired** per-key v1.06 firmware (USB `320F:5055`, VIA usage page `0xFF60`, usage `0x61`). Discovery and opening perform no lighting writes; opening accepts exact PKRG v1 capabilities (92 LEDs, eight per transfer) or optimized PKRG v2 capabilities with additional 9-LED/11-fragment stream metadata, and rejects other formats before lighting writes. The SDK exposes v2 streaming capability but **uses only sequential operation-2 chunk writes** on both versions, without atomic streaming. Future host-rendered effects and v2 atomic streaming remain separate capabilities. The SDK provides explicit `session.Advanced` controls and an `AcquireControlAsync` lease that captures colors, override, brightness and effect before taking control.
+
+Run `dotnet run --project sdk/dotnet/samples/Wobkey.Crush80.Sample/Wobkey.Crush80.Sample.csproj -- --help` for non-writing usage, or `--list` for non-writing discovery. Only `--smoke` writes lighting: it requires typing `SMOKE` before opening, verifies a temporary Esc/F1 pattern through all-92 readback, and explicitly restores. **Do not run it without hardware authorization.** Close other keyboard controllers first. Frames are volatile, sequential/non-atomic, with no FPS guarantee; restoration after faults or disconnection cannot be guaranteed. Windows wired PKRG v2 common-subset hardware verification is recorded below; Linux and macOS SDK hardware paths remain implementation targets pending separate authorized smoke runs. See the SDK README for permissions, cancellation, restoration failures, package notices, and the release-smoke checklist.
+
+Windows wired PKRG v2 common-subset SDK behavior was hardware-verified on 2026-09-26 (SDK commit `501b802`, optimized PKRG v2 firmware): `PKRG v2: 92 LEDs, 8 per chunk; override initially False.` The sample reported `Full 92-color pattern readback and restored mode/effect/brightness/RGB verified.` The user physically confirmed Esc red and F1 green during the two-second pattern. This verifies capability negotiation, sequential operation-2 writes, full readback, physical output, and restoration only on Windows. Linux and macOS SDK hardware paths remain implementation targets requiring separate authorized smoke runs. V2 atomic streaming operations 3/4 remain unimplemented and unverified in the SDK.
+
+
+## Licensing
+
+The C# SDK under [`sdk/dotnet/`](sdk/dotnet/) is licensed under the [Apache License 2.0](sdk/dotnet/LICENSE.txt). Its NuGet package includes the SDK license and the complete HidSharp license and attribution. This scoped SDK license does not apply to firmware images, vendor executables, or other repository material.
 
 ## The Problem
 
@@ -38,6 +53,8 @@ host/
   linux/                  OTA, VIA backup, and per-key RGB utilities
   windows/Crush80FirmwareInstaller/
                           Windows WPF firmware installer
+
+sdk/dotnet/               .NET 10 wired per-key SDK, sample, and tests
 
 plugins/signalrgb/
   wired/                  Wired keyboard plugin variants
