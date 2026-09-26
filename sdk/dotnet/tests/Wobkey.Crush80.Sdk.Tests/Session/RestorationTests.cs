@@ -63,6 +63,24 @@ public sealed class RestorationTests
     }
 
     [Fact]
+    public async Task RejectedSavedFrameLeavesLeaseReportingDisabledUntilRetry()
+    {
+        await using var transport = new FakeFirmwareTransport { Enabled = true };
+        await using var session = await Crush80RgbSession.OpenAsync(transport);
+        var lease = await session.AcquireControlAsync(new Rgb24[92]);
+        transport.RejectRgbWriteStartOnce = 8;
+
+        await Assert.ThrowsAsync<StateRestoreException>(async () => await lease.RestoreAsync());
+
+        Assert.False(transport.Enabled);
+        Assert.False(lease.Enabled);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await session.AcquireControlAsync(new Rgb24[92]));
+        await lease.RestoreAsync();
+        Assert.True(transport.Enabled);
+        Assert.Throws<ObjectDisposedException>(() => _ = lease.Enabled);
+    }
+
+    [Fact]
     public async Task RejectedRestoreRetainsOwnershipUntilSuccessfulRetry()
     {
         await using var transport = new FakeFirmwareTransport();

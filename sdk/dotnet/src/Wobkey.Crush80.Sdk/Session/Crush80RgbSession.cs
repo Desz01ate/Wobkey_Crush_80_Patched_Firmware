@@ -80,13 +80,13 @@ public sealed class Crush80RgbSession : IAsyncDisposable
         ExecuteAsync("RestoreState", async (client, token) =>
         {
             if (restore)
-                await RestoreStateCoreAsync(client, lease.SavedState, token).ConfigureAwait(false);
+                await RestoreStateCoreAsync(client, lease.SavedState, token, lease).ConfigureAwait(false);
             _activeLease = null;
             lease.MarkRestored();
         }, CancellationToken.None, expectedLease: lease);
 
     internal static async ValueTask RestoreStateCoreAsync(
-        PkrgV1Client client, RgbDeviceState state, CancellationToken token)
+        PkrgV1Client client, RgbDeviceState state, CancellationToken token, RgbControlLease? lease = null)
     {
         List<Exception>? failures = null;
         var disabled = false;
@@ -94,6 +94,7 @@ public sealed class Crush80RgbSession : IAsyncDisposable
         {
             await client.SetEnabledAsync(false, token).ConfigureAwait(false);
             disabled = true;
+            lease?.MarkEnabled(false);
         }
         catch (FirmwareRejectedRequestException error)
         {
@@ -137,6 +138,7 @@ public sealed class Crush80RgbSession : IAsyncDisposable
             try
             {
                 await client.SetEnabledAsync(state.Enabled, token).ConfigureAwait(false);
+                lease?.MarkEnabled(state.Enabled);
             }
             catch (FirmwareRejectedRequestException error)
             {

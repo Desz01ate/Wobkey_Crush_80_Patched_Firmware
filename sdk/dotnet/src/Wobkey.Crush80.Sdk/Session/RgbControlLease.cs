@@ -8,6 +8,7 @@ public sealed class RgbControlLease : IAsyncDisposable
     private readonly Rgb24[] _initialFrame;
     private readonly bool _restoreStateOnDispose;
     private int _restored;
+    private int _enabled = 1;
 
     internal RgbControlLease(Crush80RgbSession session, RgbDeviceState savedState, Rgb24[] initialFrame, bool restoreStateOnDispose)
     {
@@ -20,6 +21,7 @@ public sealed class RgbControlLease : IAsyncDisposable
     internal RgbDeviceState SavedState => _savedState;
     internal ReadOnlyMemory<Rgb24> InitialFrame => _initialFrame;
     internal void MarkRestored() => Volatile.Write(ref _restored, 1);
+    internal void MarkEnabled(bool enabled) => Volatile.Write(ref _enabled, enabled ? 1 : 0);
 
     /// <summary>Gets the negotiated device capabilities while this lease is active.</summary>
     public PerKeyRgbCapabilities Capabilities
@@ -37,7 +39,7 @@ public sealed class RgbControlLease : IAsyncDisposable
         get
         {
             ThrowIfRestored();
-            return true;
+            return Volatile.Read(ref _enabled) != 0;
         }
     }
 
