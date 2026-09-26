@@ -22,6 +22,7 @@ public sealed class Crush80EmulatedTransport : IHidTransport
     private readonly byte[] _pendingReply = new byte[PayloadLength];
     private readonly byte[] _stagedFrame = new byte[LedCount * 3];
     private bool _hasPendingReply;
+    private bool _clientConnected;
     private bool _disposed;
     private bool _enabled;
     private byte _brightness = 9;
@@ -29,6 +30,16 @@ public sealed class Crush80EmulatedTransport : IHidTransport
     private byte _streamFrameId;
     private int _nextStreamFragment = -1;
     private long _version;
+
+    /// <summary>Creates an in-process transport whose SDK client is immediately available.</summary>
+    public Crush80EmulatedTransport() : this(clientConnected: true)
+    {
+    }
+
+    internal Crush80EmulatedTransport(bool clientConnected)
+    {
+        _clientConnected = clientConnected;
+    }
 
     /// <inheritdoc />
     public Crush80DeviceDescriptor Device { get; } = new(
@@ -58,6 +69,7 @@ public sealed class Crush80EmulatedTransport : IHidTransport
             return new Crush80EmulatorState(
                 _version,
                 !_disposed,
+                _clientConnected,
                 _enabled,
                 _brightness,
                 _effect,
@@ -296,6 +308,24 @@ public sealed class Crush80EmulatedTransport : IHidTransport
         }
 
         return false;
+    }
+
+    internal void SetClientConnected(bool connected)
+    {
+        lock (_sync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (!connected)
+            {
+                _hasPendingReply = false;
+                _nextStreamFragment = -1;
+            }
+            if (_clientConnected != connected)
+            {
+                _clientConnected = connected;
+                _version++;
+            }
+        }
     }
 
     /// <inheritdoc />

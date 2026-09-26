@@ -89,6 +89,7 @@ internal sealed class Crush80Visualizer : IAsyncDisposable
         return Results.Json(new StateResponse(
             state.Version,
             state.Connected,
+            state.ClientConnected,
             state.Enabled,
             state.Brightness,
             state.Effect,
@@ -176,6 +177,7 @@ internal sealed class Crush80Visualizer : IAsyncDisposable
     private sealed record StateResponse(
         long Version,
         bool Connected,
+        bool ClientConnected,
         bool Enabled,
         byte Brightness,
         byte Effect,

@@ -10,6 +10,7 @@ public sealed class Crush80EmulatorState
     internal Crush80EmulatorState(
         long version,
         bool connected,
+        bool clientConnected,
         bool enabled,
         byte brightness,
         byte effect,
@@ -17,6 +18,7 @@ public sealed class Crush80EmulatorState
     {
         Version = version;
         Connected = connected;
+        ClientConnected = clientConnected;
         Enabled = enabled;
         Brightness = brightness;
         Effect = effect;
@@ -28,6 +30,9 @@ public sealed class Crush80EmulatorState
 
     /// <summary>Whether the emulated transport remains open.</summary>
     public bool Connected { get; }
+
+    /// <summary>Whether an SDK client currently owns the emulated keyboard connection.</summary>
+    public bool ClientConnected { get; }
 
     /// <summary>Whether the per-key override is enabled.</summary>
     public bool Enabled { get; }

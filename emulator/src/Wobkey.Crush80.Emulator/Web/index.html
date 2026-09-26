@@ -141,10 +141,12 @@ function render(state) {
     group.text.setAttribute('fill', luminance > 145 ? '#081018' : '#f7f9fc');
   }
 
-  panel.classList.toggle('disconnected', !state.connected);
+  panel.classList.toggle('disconnected', !state.connected || !state.clientConnected);
   const connection = document.getElementById('connection');
-  connection.textContent = state.connected ? 'transport connected' : 'transport closed';
-  connection.className = `badge ${state.connected ? 'good' : 'warn'}`;
+  connection.textContent = !state.connected
+    ? 'emulator stopped'
+    : state.clientConnected ? 'SDK client connected' : 'waiting for SDK client';
+  connection.className = `badge ${state.connected && state.clientConnected ? 'good' : 'warn'}`;
   const override = document.getElementById('override');
   override.textContent = `override ${state.enabled ? 'on' : 'off'}`;
   override.className = `badge ${state.enabled ? 'good' : 'warn'}`;

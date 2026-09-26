@@ -40,10 +40,10 @@ Run `dotnet run --project sdk/dotnet/samples/Wobkey.Crush80.Sample/Wobkey.Crush8
 
 Windows wired PKRG v2 common-subset SDK behavior was hardware-verified on 2026-09-26 (SDK commit `501b802`, optimized PKRG v2 firmware): `PKRG v2: 92 LEDs, 8 per chunk; override initially False.` The sample reported `Full 92-color pattern readback and restored mode/effect/brightness/RGB verified.` The user physically confirmed Esc red and F1 green during the two-second pattern. This verifies capability negotiation, sequential operation-2 writes, full readback, physical output, and restoration only on Windows. Linux and macOS SDK hardware paths remain implementation targets requiring separate authorized smoke runs. V2 atomic streaming operations 3/4 remain unimplemented and unverified in the SDK.
 
-The hardware-free [.NET SDK emulator](emulator/README.md) implements an injectable
-PKRG v2 transport and serves a loopback browser view of all 92 RGB slots. Run
-`dotnet run --project emulator/app/Wobkey.Crush80.Emulator.App -- --open` to
-exercise the normal SDK/adapter write path without discovering or opening HID hardware.
+The hardware-free [.NET SDK emulator](emulator/README.md) provides both injectable
+and standalone inter-process PKRG v2 transports with a browser view of all 92 RGB slots.
+Run `dotnet run --project emulator/server/Wobkey.Crush80.Emulator.Server -- --open`
+to start an idle server, then connect an SDK application through `Crush80RemoteTransport`.
 
 
 ## Licensing

@@ -28,16 +28,19 @@ For precise control without an active lease, use `session.Advanced` for frame/ra
 
 ## Hardware-free visual emulator
 
-The repository-level [`emulator/`](../../emulator/README.md) project provides a PKRG v2
-`IHidTransport` implementation and a loopback browser view of all 92 RGB slots. SDK
-applications inject `emulator.Transport` through `Crush80RgbSession.OpenAsync(transport)`;
-no HID device is discovered or opened. The emulator verifies application frame output and
-SDK lifecycle behavior, but it does not reproduce USB timing, HID permissions, physical
-scanout, or OEM animation algorithms.
+The repository-level [`emulator/`](../../emulator/README.md) project provides in-process
+and standalone PKRG v2 transports plus a loopback browser view of all 92 RGB slots. The
+standalone server generates no animation; another process connects through
+`Crush80RemoteTransport` and passes that transport to `Crush80RgbSession.OpenAsync` or the
+grid adapter.
 
 ```sh
-dotnet run --project emulator/app/Wobkey.Crush80.Emulator.App -- --open
+dotnet run --project emulator/server/Wobkey.Crush80.Emulator.Server -- --open
 ```
+
+This verifies application frame output and SDK lifecycle behavior without opening HID
+hardware. It does not reproduce USB timing, HID permissions, physical scanout, or OEM
+animation algorithms.
 
 ## Safe sample and release smoke
 

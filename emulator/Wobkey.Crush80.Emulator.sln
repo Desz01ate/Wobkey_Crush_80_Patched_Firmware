@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wobkey.Crush80.Emulator.App
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wobkey.Crush80.Emulator.Tests", "tests\Wobkey.Crush80.Emulator.Tests\Wobkey.Crush80.Emulator.Tests.csproj", "{A73786C1-2F5A-4F4A-8B7D-A95617E267D0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wobkey.Crush80.Emulator.Server", "server\Wobkey.Crush80.Emulator.Server\Wobkey.Crush80.Emulator.Server.csproj", "{85FFA16A-06AC-4D2C-80D8-BD9AAB1FA0DA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wobkey.Crush80.Emulator.Client.Sample", "client\Wobkey.Crush80.Emulator.Client.Sample\Wobkey.Crush80.Emulator.Client.Sample.csproj", "{E95CFA3B-4277-48C3-8AE0-9C438102A2DE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,5 +31,13 @@ Global
 		{A73786C1-2F5A-4F4A-8B7D-A95617E267D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A73786C1-2F5A-4F4A-8B7D-A95617E267D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A73786C1-2F5A-4F4A-8B7D-A95617E267D0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{85FFA16A-06AC-4D2C-80D8-BD9AAB1FA0DA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{85FFA16A-06AC-4D2C-80D8-BD9AAB1FA0DA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{85FFA16A-06AC-4D2C-80D8-BD9AAB1FA0DA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{85FFA16A-06AC-4D2C-80D8-BD9AAB1FA0DA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E95CFA3B-4277-48C3-8AE0-9C438102A2DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E95CFA3B-4277-48C3-8AE0-9C438102A2DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E95CFA3B-4277-48C3-8AE0-9C438102A2DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E95CFA3B-4277-48C3-8AE0-9C438102A2DE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

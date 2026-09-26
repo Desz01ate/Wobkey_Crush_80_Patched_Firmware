@@ -8,7 +8,7 @@
     <PackageId>Wobkey.Crush80.Emulator</PackageId>
     <Version>0.1.0</Version>
     <Authors>Wobkey Crush 80 Community</Authors>
-    <Description>In-process Crush 80 SDK transport emulator with a local browser visualizer.</Description>
+    <Description>Local Crush 80 SDK transport emulator with standalone IPC and browser visualization.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <RootNamespace>Wobkey.Crush80.Emulator</RootNamespace>

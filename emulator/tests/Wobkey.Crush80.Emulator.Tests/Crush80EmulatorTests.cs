@@ -67,6 +67,7 @@ public sealed class Crush80EmulatorTests
         using var state = JsonDocument.Parse(await client.GetStringAsync("api/state?after=-1"));
         var rootState = state.RootElement;
         Assert.True(rootState.GetProperty("connected").GetBoolean());
+        Assert.True(rootState.GetProperty("clientConnected").GetBoolean());
         Assert.True(rootState.GetProperty("enabled").GetBoolean());
         Assert.Equal(6, rootState.GetProperty("effect").GetByte());
         var colors = rootState.GetProperty("colors");
