@@ -26,6 +26,19 @@ public sealed class DeviceBusyException : Crush80SdkException
     }
 }
 
+/// <summary>The operating system denied access to the device interface.</summary>
+public sealed class DeviceAccessDeniedException : Crush80SdkException
+{
+    /// <summary>Initializes an exception for a device that cannot be accessed.</summary>
+    public DeviceAccessDeniedException(
+        string? operation = null,
+        Crush80DeviceDescriptor? device = null,
+        Exception? innerException = null)
+        : base("Access to the Crush 80 device was denied.", operation, device, innerException)
+    {
+    }
+}
+
 /// <summary>The connected firmware does not implement the required PKRG protocol.</summary>
 public sealed class IncompatibleFirmwareException : Crush80SdkException
 {

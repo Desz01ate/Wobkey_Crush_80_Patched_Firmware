@@ -51,6 +51,31 @@ public sealed class Crush80RgbSession : IAsyncDisposable
         }
     }
 
+    /// <summary>Opens the exact discovered wired VIA interface, then negotiates its protocol.</summary>
+    public static ValueTask<Crush80RgbSession> OpenAsync(
+        Crush80DeviceDescriptor descriptor,
+        Crush80SessionOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        cancellationToken.ThrowIfCancellationRequested();
+        options ??= new Crush80SessionOptions();
+        return OpenAsync(HidSharpTransport.Open(descriptor, options.ResponseTimeout), options, cancellationToken);
+    }
+
+    /// <summary>Opens the first discovered wired VIA interface.</summary>
+    public static ValueTask<Crush80RgbSession> OpenFirstAsync(
+        Crush80SessionOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var devices = Crush80DeviceLocator.Enumerate();
+        if (devices.Count == 0)
+            throw new DeviceNotFoundException("Open");
+
+        return OpenAsync(devices[0], options, cancellationToken);
+    }
+
     internal async ValueTask<T> ExecuteAsync<T>(
         string operation,
         Func<PkrgV1Client, CancellationToken, ValueTask<T>> action,
