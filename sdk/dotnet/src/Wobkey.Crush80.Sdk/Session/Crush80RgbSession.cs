@@ -61,13 +61,15 @@ public sealed class Crush80RgbSession : IAsyncDisposable
             }
             catch (Exception acquisitionError)
             {
+                if (acquisitionError is not FirmwareRejectedRequestException and not OperationCanceledException)
+                    Volatile.Write(ref _fault, acquisitionError);
                 try
                 {
                     await RestoreStateCoreAsync(client, saved, CancellationToken.None).ConfigureAwait(false);
                 }
-                catch (Exception restorationError)
+                catch (StateRestoreException restorationError)
                 {
-                    throw new StateRestoreException(new AggregateException(acquisitionError, restorationError));
+                    throw new StateRestoreException(restorationError.Failures, acquisitionError);
                 }
                 throw;
             }
@@ -83,71 +85,71 @@ public sealed class Crush80RgbSession : IAsyncDisposable
                 await RestoreStateCoreAsync(client, lease.SavedState, token, lease).ConfigureAwait(false);
             _activeLease = null;
             lease.MarkRestored();
-        }, CancellationToken.None, expectedLease: lease);
+        }, CancellationToken.None, expectedLease: lease, allowFaulted: restore);
 
-    internal static async ValueTask RestoreStateCoreAsync(
+    private static readonly string[] RestorationFields =
+        ["OverrideDisable", "Colors", "Brightness", "Effect", "OverrideEnable"];
+
+    internal async ValueTask RestoreStateCoreAsync(
         PkrgV1Client client, RgbDeviceState state, CancellationToken token, RgbControlLease? lease = null)
     {
-        List<Exception>? failures = null;
+        List<StateRestoreFailure>? failures = null;
         var disabled = false;
-        try
+        var colorsRestored = false;
+        for (var step = 0; step < RestorationFields.Length; step++)
         {
-            await client.SetEnabledAsync(false, token).ConfigureAwait(false);
-            disabled = true;
-            lease?.MarkEnabled(false);
-        }
-        catch (FirmwareRejectedRequestException error)
-        {
-            (failures ??= []).Add(error);
-        }
+            if (Volatile.Read(ref _fault) is { } fault)
+            {
+                (failures ??= []).Add(new StateRestoreFailure(RestorationFields[step],
+                    new SessionFaultedException("RestoreState", Device, fault)));
+                continue;
+            }
 
-        var frameRestored = false;
-        if (disabled)
-        {
             try
             {
-                await client.WriteRangeAsync(0, state.Colors, token).ConfigureAwait(false);
-                frameRestored = true;
+                switch (step)
+                {
+                    case 0:
+                        await client.SetEnabledAsync(false, token).ConfigureAwait(false);
+                        disabled = true;
+                        lease?.MarkEnabled(false);
+                        break;
+                    case 1:
+                        await client.WriteRangeAsync(0, state.Colors, token).ConfigureAwait(false);
+                        colorsRestored = true;
+                        break;
+                    case 2:
+                        await client.SetBrightnessAsync(state.Brightness, token).ConfigureAwait(false);
+                        break;
+                    case 3:
+                        await client.SetEffectAsync(state.Effect, token).ConfigureAwait(false);
+                        break;
+                    case 4 when disabled && !colorsRestored && state.Enabled:
+                        // Do not turn on an incompletely restored frame after a successful disable.
+                        break;
+                    case 4:
+                        await client.SetEnabledAsync(state.Enabled, token).ConfigureAwait(false);
+                        lease?.MarkEnabled(state.Enabled);
+                        break;
+                }
             }
             catch (FirmwareRejectedRequestException error)
             {
-                (failures ??= []).Add(error);
+                (failures ??= []).Add(new StateRestoreFailure(RestorationFields[step], error));
             }
-        }
-
-        try
-        {
-            await client.SetBrightnessAsync(state.Brightness, token).ConfigureAwait(false);
-        }
-        catch (FirmwareRejectedRequestException error)
-        {
-            (failures ??= []).Add(error);
-        }
-
-        try
-        {
-            await client.SetEffectAsync(state.Effect, token).ConfigureAwait(false);
-        }
-        catch (FirmwareRejectedRequestException error)
-        {
-            (failures ??= []).Add(error);
-        }
-
-        if (frameRestored)
-        {
-            try
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
-                await client.SetEnabledAsync(state.Enabled, token).ConfigureAwait(false);
-                lease?.MarkEnabled(state.Enabled);
+                throw;
             }
-            catch (FirmwareRejectedRequestException error)
+            catch (Exception error)
             {
-                (failures ??= []).Add(error);
+                (failures ??= []).Add(new StateRestoreFailure(RestorationFields[step], error));
+                Volatile.Write(ref _fault, error);
             }
         }
 
         if (failures is { Count: > 0 })
-            throw new StateRestoreException(failures.Count == 1 ? failures[0] : new AggregateException(failures));
+            throw new StateRestoreException(failures);
     }
 
     /// <summary>Opens a session over an injected transport, transferring ownership of it to the session.</summary>
@@ -201,13 +203,16 @@ public sealed class Crush80RgbSession : IAsyncDisposable
         Func<PkrgV1Client, CancellationToken, ValueTask<T>> action,
         CancellationToken cancellationToken,
         bool requireNoLease = false,
-        RgbControlLease? expectedLease = null)
+        RgbControlLease? expectedLease = null,
+        bool allowFaulted = false)
     {
-        ThrowIfDisposedOrFaulted(operation);
+        ThrowIfDisposedOrFaulted(operation, allowFaulted);
+        cancellationToken.ThrowIfCancellationRequested();
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposedOrFaulted(operation);
+            ThrowIfDisposedOrFaulted(operation, allowFaulted);
+            cancellationToken.ThrowIfCancellationRequested();
             if (requireNoLease && _activeLease is not null)
                 throw new InvalidOperationException("Direct RGB mutations are unavailable while a control lease is active.");
             if (expectedLease is not null && !ReferenceEquals(_activeLease, expectedLease))
@@ -220,7 +225,7 @@ public sealed class Crush80RgbSession : IAsyncDisposable
             {
                 throw;
             }
-            catch (StateRestoreException exception) when (exception.InnerException is FirmwareRejectedRequestException or AggregateException)
+            catch (StateRestoreException)
             {
                 throw;
             }
@@ -245,23 +250,24 @@ public sealed class Crush80RgbSession : IAsyncDisposable
         Func<PkrgV1Client, CancellationToken, ValueTask> action,
         CancellationToken cancellationToken,
         bool requireNoLease = false,
-        RgbControlLease? expectedLease = null)
+        RgbControlLease? expectedLease = null,
+        bool allowFaulted = false)
     {
         await ExecuteAsync<object?>(operation, async (client, token) =>
         {
             await action(client, token).ConfigureAwait(false);
             return null;
-        }, cancellationToken, requireNoLease, expectedLease).ConfigureAwait(false);
+        }, cancellationToken, requireNoLease, expectedLease, allowFaulted).ConfigureAwait(false);
     }
 
-    private void ThrowIfDisposedOrFaulted(string operation)
+    private void ThrowIfDisposedOrFaulted(string operation, bool allowFaulted = false)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        if (Volatile.Read(ref _fault) is { } fault)
+        if (!allowFaulted && Volatile.Read(ref _fault) is { } fault)
             throw new SessionFaultedException(operation, Device, fault);
     }
 
-    /// <summary>Stops accepting operations, waits for the active exchange, and closes the transport.</summary>
+    /// <summary>Stops accepting operations, restores an active lease when configured, then closes the transport.</summary>
     public ValueTask DisposeAsync()
     {
         lock (_operationGate)
@@ -274,7 +280,23 @@ public sealed class Crush80RgbSession : IAsyncDisposable
         await _operationGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            await _transport.DisposeAsync().ConfigureAwait(false);
+            try
+            {
+                if (_activeLease is { } lease)
+                {
+                    if (lease.RestoreStateOnDispose)
+                        await RestoreStateCoreAsync(_client, lease.SavedState, CancellationToken.None, lease)
+                            .ConfigureAwait(false);
+                    _activeLease = null;
+                    lease.MarkRestored();
+                }
+            }
+            finally
+            {
+                _activeLease?.MarkRestored();
+                _activeLease = null;
+                await _transport.DisposeAsync().ConfigureAwait(false);
+            }
         }
         finally
         {

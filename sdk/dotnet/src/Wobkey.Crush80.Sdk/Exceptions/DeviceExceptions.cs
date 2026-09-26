@@ -117,13 +117,3 @@ public sealed class SessionFaultedException : Crush80SdkException
     {
     }
 }
-
-/// <summary>The SDK was unable to restore the device's captured lighting state.</summary>
-public sealed class StateRestoreException : Crush80SdkException
-{
-    /// <summary>Initializes an exception for an incomplete state restoration.</summary>
-    public StateRestoreException(Exception? innerException = null)
-        : base("The keyboard state could not be restored completely.", "RestoreState", innerException: innerException)
-    {
-    }
-}

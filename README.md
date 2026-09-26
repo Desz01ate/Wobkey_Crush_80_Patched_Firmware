@@ -41,9 +41,16 @@ frame, selects the requested hardware brightness (default 9) and effect 6, and
 enables the override. Only one control lease can be active. While it is active,
 `session.Advanced` reads remain available, but its mutations and state restoration
 are blocked. `await lease.RestoreAsync()` restores the snapshot in safe order;
-disposing the lease does the same by default. Set
-`RgbControlOptions.RestoreStateOnDispose = false` to release ownership without
-restoring the snapshot. Dispose or restore the lease before closing its session.
+disposing the lease or the session restores it by default, even when another
+request is completing. Set `RgbControlOptions.RestoreStateOnDispose = false` to
+release ownership without restoring the snapshot. Session disposal always closes
+the transport; if restoration fails, it throws `StateRestoreException` after closure.
+The exception's `Failures` list names each failed step (`OverrideDisable`,
+`Colors`, `Brightness`, `Effect`, `OverrideEnable`). A firmware rejection allows
+safe later steps to continue; a timeout, malformed reply, or transport failure
+stops further requests and reports unattempted steps as `SessionFaultedException`.
+Cancellation takes effect before a request starts, never between its write and
+matching reply; a multi-request call can stop between complete requests.
 
 The lease provides `WriteFrameAsync`, `WriteRangeAsync`, `FillAsync`,
 `ReadFrameAsync`, and `SetHardwareBrightnessAsync` (0–9). Frame writes compare

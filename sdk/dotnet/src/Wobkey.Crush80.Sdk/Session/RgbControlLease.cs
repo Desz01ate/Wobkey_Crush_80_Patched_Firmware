@@ -23,6 +23,7 @@ public sealed class RgbControlLease : IAsyncDisposable
     }
 
     internal RgbDeviceState SavedState => _savedState;
+    internal bool RestoreStateOnDispose => _restoreStateOnDispose;
     internal void MarkRestored() => Volatile.Write(ref _restored, 1);
     internal void MarkEnabled(bool enabled) => Volatile.Write(ref _enabled, enabled ? 1 : 0);
 

@@ -54,7 +54,9 @@ public sealed class AdvancedOperationsTests
         var error = await Assert.ThrowsAsync<StateRestoreException>(async () =>
             await session.Advanced.RestoreStateAsync(state));
 
-        Assert.IsType<FirmwareRejectedRequestException>(error.InnerException);
+        var failure = Assert.Single(error.Failures);
+        Assert.Equal("OverrideDisable", failure.Field);
+        Assert.IsType<FirmwareRejectedRequestException>(failure.Error);
         Assert.Equal((byte)4, transport.Brightness);
         Assert.Equal((byte)12, transport.Effect);
         Assert.True(await session.Advanced.GetEnabledAsync());

@@ -26,7 +26,7 @@ public sealed class Crush80RgbAdvanced
     {
         ArgumentNullException.ThrowIfNull(state);
         return _session.ExecuteAsync("RestoreState", (client, token) =>
-            Crush80RgbSession.RestoreStateCoreAsync(client, state, token), cancellationToken, requireNoLease: true);
+            _session.RestoreStateCoreAsync(client, state, token), cancellationToken, requireNoLease: true);
     }
 
     /// <summary>Reads exactly one full negotiated RGB frame.</summary>
