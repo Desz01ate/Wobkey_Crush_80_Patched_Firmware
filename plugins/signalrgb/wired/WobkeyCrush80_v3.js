@@ -1,6 +1,6 @@
 /**
  * Wobkey Crush 80 wired per-key RGB, V3.
- * Requires `firmware/releases/v1.06-per-key/firmware_per_key_v2.bin` (PKRG protocol version 1).
+ * Requires `firmware/releases/v1.06-per-key/firmware_per_key_v3.bin` (PKRG protocol version 2).
  * No firmware flashing, wireless-mode commands, or EEPROM saves.
  *
  * LED indices: v1.06 matrix table at 0x1BC74. Geometry is an ANSI TKL layout;
@@ -15,8 +15,12 @@ export function Type() { return "hid"; }
 export function Size() { return [37, 12]; }
 export function DefaultLayout() { return "Default"; }
 export function DeviceMessage() {
-    return ["Requires the per-key v1.06 firmware; wired USB only.",
-        "V3 uses individual RGB colors. Remove older wired custom plugins before installing it."];
+    return ["Requires the streaming per-key v1.06 firmware (PKRG v2); wired USB only.",
+        "Full frames activate together. Replace older wired custom plugins; firmware upgrade required."];
+}
+export function ControllableParameters() {
+    return [{ property: "logFrameTiming", label: "Log frame timing (diagnostic)",
+        type: "boolean", default: false }];
 }
 export function Validate(endpoint) {
     return endpoint.interface === 1 && endpoint.usage_page === 0xFF60 && endpoint.usage === 0x61;
@@ -63,31 +67,51 @@ export function LedPositions() { return positions; }
 
 const LED_COUNT = 92;
 const CHUNK_LEDS = 8;
+const STREAM_LEDS = 9;
+const STREAM_CHUNKS = 11;
 const CHANNEL = 0x7F;
 const TIMEOUT_MS = 100;
 const frame = new Array(LED_COUNT * 3).fill(0);
 const previousFrame = new Array(LED_COUNT * 3).fill(-1);
 const packet = new Array(33).fill(0);
-const chunkPayload = new Array(6 + CHUNK_LEDS * 3).fill(0);
+const streamPayload = new Array(32).fill(0);
+const commitPayload = [7, CHANNEL, 4, 0, 0];
 const readReport = [0x00];
+let sequence = 0;
+let pendingFrame = -1;
+let pendingReplies = 0;
+const timing = { frames: 0, chunks: 0, prepare: 0, writes: 0, reads: 0,
+    gaps: 0, gapCount: 0, previousEnd: 0 };
 let saved = null;
 let streaming = false;
 
 // SignalRGB's HID write needs report ID zero. Its input path can return
 // either 32 payload bytes or a zero-prefixed 33-byte report; use the actual
 // read size rather than assuming padding is a received acknowledgement.
-function exchange(payload) {
+function send(payload, expectsReply = true) {
     packet.fill(0);
     for (let i = 0; i < payload.length; i++) packet[i + 1] = payload[i];
-    device.write(packet, packet.length);
+    if (device.write(packet, packet.length) === -1) throw new Error("Keyboard write failed");
+    if (expectsReply) pendingReplies++;
+}
+
+function receive(payload) {
     const raw = device.read(readReport, 33, TIMEOUT_MS);
     const size = device.getLastReadSize();
     if (size === 0) throw new Error("Keyboard response timed out");
+    if (pendingFrame < 0) pendingReplies--;
     const offset = size === 33 && raw[0] === 0 ? 1 : 0;
     if ((size !== 32 && size !== 33) || raw.length < offset + 32) {
         throw new Error("Unexpected HID response size");
     }
     const reply = offset === 1 ? raw.slice(1, 33) : raw;
+    if (pendingFrame >= 0) {
+        if (reply[0] !== 7 || reply[1] !== CHANNEL || reply[2] !== 4 || reply[4] !== pendingFrame) {
+            throw new Error("Unexpected frame acknowledgement; waiting for the submitted frame");
+        }
+        pendingFrame = -1;
+        pendingReplies--;
+    }
     if (reply[0] !== payload[0] || reply[1] !== payload[1] || reply[2] !== payload[2]) {
         throw new Error("Unexpected VIA response; close other keyboard-control software");
     }
@@ -97,13 +121,43 @@ function exchange(payload) {
     return reply;
 }
 
+function exchange(payload) {
+    send(payload);
+    return receive(payload);
+}
+
+function drainReplies() {
+    // A stale/malformed frame reply does not account for our pending commit.
+    // Bound recovery even if another controller keeps sending unrelated data.
+    const deadline = Date.now() + TIMEOUT_MS;
+    while (pendingReplies > 0) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) throw new Error("Keyboard replies still outstanding");
+        const raw = device.read(readReport, 33, remaining);
+        const size = device.getLastReadSize();
+        if (size === 0) throw new Error("Keyboard replies still outstanding");
+        if (pendingFrame >= 0) {
+            const offset = size === 33 && raw[0] === 0 ? 1 : 0;
+            if ((size !== 32 && size !== 33) || raw.length < offset + 32) continue;
+            if (raw[offset] !== 7 || raw[offset + 1] !== CHANNEL || raw[offset + 2] !== 4 ||
+                raw[offset + 4] !== pendingFrame) continue;
+            pendingFrame = -1;
+        }
+        pendingReplies--;
+    }
+    device.clearReadBuffer();
+}
+
 function capabilities() {
     const reply = exchange([8, CHANNEL, 0]);
-    const expected = [80, 75, 82, 71, 1, LED_COUNT, CHUNK_LEDS]; // PKRG
+    const expected = [80, 75, 82, 71, 2, LED_COUNT, CHUNK_LEDS]; // PKRG
     for (let i = 0; i < expected.length; i++) {
         if (reply[i + 4] !== expected[i]) {
-            throw new Error("Compatible per-key firmware required; no lighting writes sent");
+            throw new Error("Streaming per-key firmware (PKRG v2) required; no lighting writes sent");
         }
+    }
+    if (reply[12] !== STREAM_LEDS || reply[13] !== STREAM_CHUNKS) {
+        throw new Error("Unsupported streaming frame format");
     }
     if (reply[11] !== 0 && reply[11] !== 1) throw new Error("Invalid firmware mode flag");
     return reply[11];
@@ -136,30 +190,39 @@ function readFrame() {
     return colors;
 }
 
-function writeChunk(colors, start, count) {
-    chunkPayload[0] = 7;
-    chunkPayload[1] = CHANNEL;
-    chunkPayload[2] = 2;
-    chunkPayload[3] = 0;
-    chunkPayload[4] = start;
-    chunkPayload[5] = count;
-    for (let i = 0; i < CHUNK_LEDS * 3; i++) {
-        chunkPayload[6 + i] = i < count * 3 ? colors[start * 3 + i] : 0;
+function sendFrame(colors) {
+    sequence = (sequence + 1) & 255;
+    streamPayload[0] = 7;
+    streamPayload[1] = CHANNEL;
+    streamPayload[2] = 3;
+    streamPayload[3] = sequence;
+    for (let index = 0; index < STREAM_CHUNKS; index++) {
+        streamPayload[4] = index;
+        const first = index * STREAM_LEDS * 3;
+        for (let i = 0; i < STREAM_LEDS * 3; i++) {
+            streamPayload[5 + i] = first + i < colors.length ? colors[first + i] : 0;
+        }
+        // Fragment reports are silent, including invalid fragments. Only the
+        // COMMIT response can establish that the complete frame was accepted.
+        send(streamPayload, false);
     }
-    const reply = exchange(chunkPayload);
-    for (let i = 4; i < 6 + count * 3; i++) {
-        if (reply[i] !== chunkPayload[i]) throw new Error("RGB write acknowledgement mismatch");
-    }
+    commitPayload[4] = sequence;
+    send(commitPayload);
+    pendingFrame = sequence;
+}
+
+function acknowledgeFrame() {
+    receive(commitPayload);
 }
 
 function writeFrame(colors) {
-    for (let start = 0; start < LED_COUNT; start += CHUNK_LEDS) {
-        writeChunk(colors, start, Math.min(CHUNK_LEDS, LED_COUNT - start));
-    }
+    sendFrame(colors);
+    acknowledgeFrame();
 }
 
 function restoreState() {
     if (saved === null) return;
+    drainReplies();
     setMode(0);
     writeFrame(saved.colors);
     setOEM(1, saved.brightness);
@@ -168,10 +231,39 @@ function restoreState() {
     saved = null;
 }
 
+export function onlogFrameTimingChanged() {
+    for (const key in timing) timing[key] = 0;
+}
+
+function recordTiming(start, prepared, written, finished, chunks) {
+    if (timing.previousEnd !== 0) {
+        timing.gaps += start - timing.previousEnd;
+        timing.gapCount++;
+    }
+    timing.frames++;
+    timing.chunks += chunks;
+    timing.prepare += prepared - start;
+    timing.writes += written - prepared;
+    timing.reads += finished - written;
+    timing.previousEnd = finished;
+    if (timing.frames < 120) return;
+    const frames = timing.frames;
+    const work = (timing.prepare + timing.writes + timing.reads) / frames;
+    const gap = timing.gapCount === 0 ? 0 : timing.gaps / timing.gapCount;
+    device.log(`Wobkey V3 timing: ${frames} frames; chunks/frame=${(timing.chunks / frames).toFixed(2)}; ` +
+        `prepare=${(timing.prepare / frames).toFixed(2)}ms; write=${(timing.writes / frames).toFixed(2)}ms; ` +
+        `ack=${(timing.reads / frames).toFixed(2)}ms; work=${work.toFixed(2)}ms; gap=${gap.toFixed(2)}ms`);
+    onlogFrameTimingChanged();
+}
+
 export function Initialize() {
     streaming = false;
     saved = null;
     previousFrame.fill(-1);
+    pendingReplies = 0;
+    sequence = 0;
+    pendingFrame = -1;
+    onlogFrameTimingChanged();
     try {
         device.clearReadBuffer();
         const enabled = capabilities();
@@ -201,24 +293,26 @@ export function Initialize() {
 export function Render() {
     if (!streaming) return;
     try {
+        const measuring = logFrameTiming;
+        const started = measuring ? Date.now() : 0;
         for (let index = 0; index < LED_COUNT; index++) {
             const color = device.color(positions[index][0], positions[index][1]);
             frame[index * 3] = color[0];
             frame[index * 3 + 1] = color[1];
             frame[index * 3 + 2] = color[2];
         }
-        for (let start = 0; start < LED_COUNT; start += CHUNK_LEDS) {
-            const count = Math.min(CHUNK_LEDS, LED_COUNT - start);
-            const first = start * 3, end = (start + count) * 3;
-            let changed = false;
-            for (let i = first; i < end; i++) {
-                if (frame[i] !== previousFrame[i]) { changed = true; break; }
-            }
-            if (!changed) continue;
-            writeChunk(frame, start, count);
-            // Never cache an unacknowledged chunk as successfully delivered.
-            for (let i = first; i < end; i++) previousFrame[i] = frame[i];
+        const prepared = measuring ? Date.now() : 0;
+        let changed = false;
+        for (let i = 0; i < frame.length; i++) {
+            if (frame[i] !== previousFrame[i]) { changed = true; break; }
         }
+        if (changed) sendFrame(frame);
+        const written = measuring ? Date.now() : 0;
+        if (changed) {
+            acknowledgeFrame();
+            for (let i = 0; i < frame.length; i++) previousFrame[i] = frame[i];
+        }
+        if (measuring) recordTiming(started, prepared, written, Date.now(), changed ? STREAM_CHUNKS : 0);
     } catch (error) {
         streaming = false;
         device.log(`Wobkey V3 streaming stopped: ${error.message}. Toggle streaming to reconnect.`);
@@ -231,7 +325,6 @@ export function Shutdown() {
     streaming = false;
     if (saved === null) return;
     try {
-        device.clearReadBuffer();
         restoreState();
     } catch (error) {
         device.log(`Wobkey V3 shutdown restore failed: ${error.message}`);

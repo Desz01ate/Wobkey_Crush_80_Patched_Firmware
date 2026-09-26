@@ -106,14 +106,17 @@ class ViaHID:
     def close(self):
         os.close(self.fd)
 
+    def write(self, data):
+        """Send one report without expecting a reply (streaming fragments)."""
+        if len(data) > REPORT_SIZE:
+            raise ValueError('VIA report exceeds 32 bytes')
+        packet = bytes([0]) + bytes(data).ljust(REPORT_SIZE, b'\0')
+        if os.write(self.fd, packet) != len(packet):
+            raise OSError('Incomplete VIA report write')
+
     def transact(self, data, timeout=2.0):
         """Send a VIA command and return the response."""
-        pkt = bytearray(REPORT_SIZE + 1)  # +1 for report ID 0
-        pkt[0] = 0x00  # No report ID
-        for i, b in enumerate(data):
-            if i < REPORT_SIZE:
-                pkt[1 + i] = b
-        os.write(self.fd, bytes(pkt))
+        self.write(data)
 
         ready, _, _ = select.select([self.fd], [], [], timeout)
         if ready:

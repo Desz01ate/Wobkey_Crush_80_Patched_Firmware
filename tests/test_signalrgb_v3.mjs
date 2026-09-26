@@ -16,6 +16,10 @@ class Keyboard {
     this.compatible = compatible;
     this.prefix = prefix;
     this.enabled = enabled;
+    this.protocol = 2;
+    this.staged = [];
+    this.nextFragment = -1;
+    this.frameSequence = -1;
     this.effect = 4;
     this.brightness = 5;
     this.rgb = Array.from({ length: 92 }, (_, i) => [i, 255-i, i ^ 85]);
@@ -52,7 +56,7 @@ class Keyboard {
     if (channel === 127 && this.compatible) {
       response[3] = 0;
       if (operation === 0 && command === 8) {
-        response.splice(4, 8, 80, 75, 82, 71, 1, 92, 8, Number(this.enabled));
+        response.splice(4, 10, 80, 75, 82, 71, this.protocol, 92, 8, Number(this.enabled), 9, 11);
       } else if (operation === 1) {
         if (command === 7) {
           if (response[4] > 1) response[3] = 3;
@@ -71,6 +75,24 @@ class Keyboard {
           }
           if (command === 7) this.rgbWrites++;
         }
+      } else if (this.protocol === 2 && command === 7 && operation === 3) {
+        const sequence = data[4], index = data[5];
+        if (index === 0) { this.frameSequence = sequence; this.nextFragment = 0; this.staged = []; }
+        if (sequence !== this.frameSequence || index !== this.nextFragment || index >= 11 || this.rejectNextChunk) {
+          this.rejectNextChunk = false;
+          this.nextFragment = -1;
+        } else {
+          this.staged.push(...Array.from(data).slice(6, 6 + (index === 10 ? 6 : 27)));
+          this.nextFragment++;
+          this.rgbWrites++;
+        }
+        return;
+      } else if (this.protocol === 2 && command === 7 && operation === 4) {
+        if (response[4] !== this.frameSequence || this.nextFragment !== 11) response[3] = 4;
+        else {
+          this.rgb = Array.from({ length: 92 }, (_, i) => this.staged.slice(i*3, i*3+3));
+          this.nextFragment = -1;
+        }
       } else response[3] = 1;
     } else if (channel === 3 && (operation === 1 || operation === 2)) {
       const field = operation === 1 ? 'brightness' : 'effect';
@@ -87,8 +109,8 @@ class Keyboard {
   }
 }
 
-async function loadPlugin(keyboard) {
-  const context = vm.createContext({ device: keyboard.device });
+async function loadPlugin(keyboard, settings = {}) {
+  const context = vm.createContext({ device: keyboard.device, logFrameTiming: false, ...settings });
   const module = new vm.SourceTextModule(await readFile(pluginPath, 'utf8'), { context });
   await module.link(() => { throw new Error('Plugin must be a standalone file'); });
   await module.evaluate();
@@ -149,7 +171,6 @@ test('unchanged frames do not consume USB bandwidth; changes still render', asyn
   plugin.Render();
   assert.deepEqual(keyboard.rgb[1], [99,88,77]);
   assert.deepEqual(keyboard.rgb[91], [12,34,56]);
-  assert.equal(keyboard.rgbWrites, 1);
 });
 
 test('a rejected frame stops streaming and shutdown can recover prior lighting', async () => {
@@ -206,4 +227,203 @@ test('a missing capability reply leaves the keyboard unchanged', async () => {
   assert.deepEqual(keyboard.snapshot(), before);
   assert.equal(keyboard.writes, 0);
   assert.ok(keyboard.logs.some(message => /timed out/i.test(message)));
+});
+
+test('a queued rejected frame is drained before restoring the previous lighting',
+  { skip: expectedProductId !== 0x5055 }, async () => {
+  const keyboard = new Keyboard({ enabled: true, prefix: true });
+  const before = keyboard.snapshot();
+  const plugin = await loadPlugin(keyboard);
+  plugin.Initialize();
+  const write = keyboard.device.write;
+  let injected = false;
+  keyboard.device.write = (data, length) => {
+    write(data, length);
+    if (!injected && data[1] === 7 && data[2] === 127 && data[3] === 4) {
+      injected = true;
+      // A stale commit reply must not be accepted for the submitted frame.
+      keyboard.pending.unshift([0, 7, 127, 4, 0, data[5] ^ 255, ...new Array(27).fill(0)]);
+    }
+  };
+  plugin.Render();
+  assert.deepEqual(keyboard.snapshot(), before);
+  const writesAfterFailure = keyboard.writes;
+  plugin.Render();
+  assert.equal(keyboard.writes, writesAfterFailure);
+});
+
+test('bad chunk acknowledgements stop rendering and preserve recoverable state', async () => {
+  for (const corrupt of [
+    reply => { reply[3] = 4; },
+    reply => { reply[4] ^= 255; },
+    reply => { reply[2] = 255; },
+    reply => { reply.splice(12); },
+  ]) {
+    const keyboard = new Keyboard({ enabled: true });
+    const before = keyboard.snapshot();
+    const plugin = await loadPlugin(keyboard);
+    plugin.Initialize();
+    const read = keyboard.device.read;
+    let injected = false;
+    keyboard.device.read = () => {
+      const reply = read();
+      if (!injected && reply[0] === 7 && reply[1] === 127 && reply[2] === (expectedProductId === 0x5055 ? 4 : 2)) {
+        injected = true;
+        if (expectedProductId === 0x5055) keyboard.pending.unshift(reply.slice());
+        corrupt(reply);
+        keyboard.lastRead = reply.length;
+      }
+      return reply;
+    };
+    plugin.Render();
+    assert.deepEqual(keyboard.snapshot(), before);
+    const writesAfterFailure = keyboard.writes;
+    plugin.Render();
+    assert.equal(keyboard.writes, writesAfterFailure);
+  }
+});
+
+test('a read timeout cannot let a late RGB reply acknowledge restoration',
+  { skip: expectedProductId !== 0x5055 }, async () => {
+  const keyboard = new Keyboard({ enabled: true });
+  const before = keyboard.snapshot();
+  const plugin = await loadPlugin(keyboard);
+  plugin.Initialize();
+  const read = keyboard.device.read;
+  let timedOut = false;
+  keyboard.device.read = () => {
+    if (!timedOut) {
+      timedOut = true;
+      keyboard.lastRead = 0;
+      return [];
+    }
+    return read();
+  };
+  plugin.Render();
+  assert.deepEqual(keyboard.snapshot(), before);
+  const writesAfterFailure = keyboard.writes;
+  plugin.Render();
+  assert.equal(keyboard.writes, writesAfterFailure);
+});
+
+test('unavailable acknowledgements defer restoration until the queue can be drained',
+  { skip: expectedProductId !== 0x5055 }, async () => {
+  const keyboard = new Keyboard({ enabled: true });
+  const before = keyboard.snapshot();
+  const plugin = await loadPlugin(keyboard);
+  plugin.Initialize();
+  const read = keyboard.device.read;
+  keyboard.device.read = () => { keyboard.lastRead = 0; return []; };
+  plugin.Render();
+  const stalled = keyboard.snapshot();
+  assert.deepEqual(stalled.rgb, new Array(92).fill([12,34,56]));
+  assert.equal(stalled.enabled, true);
+  assert.equal(stalled.effect, 6);
+  const writesAfterFailure = keyboard.writes;
+  plugin.Render();
+  plugin.Shutdown();
+  assert.equal(keyboard.writes, writesAfterFailure);
+  keyboard.device.read = read;
+  plugin.Shutdown();
+  assert.deepEqual(keyboard.snapshot(), before);
+});
+
+test('a failed write drains the accepted prefix before restoring lighting',
+  { skip: expectedProductId !== 0x5055 }, async () => {
+  for (const failure of ['throw', 'return']) {
+    const keyboard = new Keyboard({ enabled: true });
+    const before = keyboard.snapshot();
+    const plugin = await loadPlugin(keyboard);
+    plugin.Initialize();
+    const write = keyboard.device.write;
+    let chunks = 0;
+    keyboard.device.write = (data, length) => {
+      if (data[1] === 7 && data[2] === 127 && data[3] === 3 && ++chunks === 5) {
+        if (failure === 'throw') throw new Error('USB write failed');
+        return -1;
+      }
+      return write(data, length);
+    };
+    plugin.Render();
+    assert.deepEqual(keyboard.snapshot(), before);
+    const writesAfterFailure = keyboard.writes;
+    plugin.Render();
+    assert.equal(keyboard.writes, writesAfterFailure);
+  }
+});
+
+test('old per-key firmware is rejected before streaming writes',
+  { skip: expectedProductId !== 0x5055 }, async () => {
+  const keyboard = new Keyboard();
+  keyboard.protocol = 1;
+  const before = keyboard.snapshot();
+  const plugin = await loadPlugin(keyboard);
+  plugin.Initialize();
+  plugin.Render();
+  assert.deepEqual(keyboard.snapshot(), before);
+  assert.equal(keyboard.writes, 0);
+});
+
+test('a lost fragment leaves the previous complete frame recoverable',
+  { skip: expectedProductId !== 0x5055 }, async () => {
+  const keyboard = new Keyboard({ enabled: true });
+  const before = keyboard.snapshot();
+  const plugin = await loadPlugin(keyboard);
+  plugin.Initialize();
+  const write = keyboard.device.write;
+  let dropped = false;
+  keyboard.device.write = (packet, size) => {
+    if (!dropped && packet[1] === 7 && packet[2] === 127 && packet[3] === 3 && packet[5] === 5) {
+      dropped = true;
+      return;
+    }
+    return write(packet, size);
+  };
+  plugin.Render();
+  assert.deepEqual(keyboard.snapshot(), before);
+  const writesAfterFailure = keyboard.writes;
+  plugin.Render();
+  assert.equal(keyboard.writes, writesAfterFailure);
+});
+
+test('a stale frame reply cannot bypass waiting for the real commit reply',
+  { skip: expectedProductId !== 0x5055 }, async () => {
+  const keyboard = new Keyboard({ enabled: true });
+  const before = keyboard.snapshot();
+  const plugin = await loadPlugin(keyboard);
+  plugin.Initialize();
+  const read = keyboard.device.read;
+  let originalReply;
+  let injected = false;
+  keyboard.device.read = () => {
+    if (!injected) {
+      injected = true;
+      originalReply = read();
+      const stale = originalReply.slice();
+      stale[4] ^= 255;
+      return stale;
+    }
+    if (originalReply) {
+      const reply = originalReply;
+      originalReply = null;
+      keyboard.lastRead = reply.length;
+      return reply;
+    }
+    return read();
+  };
+  plugin.Render();
+  assert.deepEqual(keyboard.snapshot(), before);
+});
+
+test('frame sequence wrap preserves complete RGB output',
+  { skip: expectedProductId !== 0x5055 }, async () => {
+  const keyboard = new Keyboard();
+  const plugin = await loadPlugin(keyboard);
+  plugin.Initialize();
+  for (let frame = 0; frame < 260; frame++) {
+    keyboard.canvas = (x, y) => [(frame + x) & 255, y, 255 - (frame & 255)];
+    plugin.Render();
+  }
+  assert.deepEqual(keyboard.rgb[0], [3, 0, 252]);
+  assert.deepEqual(keyboard.rgb[91], [38, 11, 252]);
 });

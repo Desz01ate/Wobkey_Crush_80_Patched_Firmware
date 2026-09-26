@@ -38,11 +38,11 @@
     {
       "id": "crush80-v106-per-key-rgb",
       "targetId": "crush80-wired",
-      "name": "Per-key RGB firmware",
-      "version": "1.06 Per-Key",
-      "file": "firmware/firmware_per_key_v2.bin",
-      "description": "Optional wired per-key RGB firmware based on v1.06. Use with the V3 SignalRGB plugins; firmware RGB changes are volatile.",
-      "sha256": "f7c1a736b8172db26ba07f6eba2b094b607e8067c91e2f1807eba767e630a7cc",
+      "name": "Per-key RGB streaming firmware",
+      "version": "1.06 Per-Key / PKRG 2",
+      "file": "firmware/firmware_per_key_v3.bin",
+      "description": "Experimental wired frame streaming on the existing HID interface. Requires matching PKRG v2 host tools/plugins. Wired frame delivery/readback is verified; Windows measurements show no throughput gain. Physical appearance and sustained operation remain unverified. Back up VIA configuration before flashing.",
+      "sha256": "1e23e5352c4c9780728503fe989521437c380a39046c26ae2bbd8c1119353362",
       "recommended": false
     }
   ],
@@ -94,23 +94,23 @@
     {
       "id": "crush80-wired-v3-per-key",
       "name": "Wobkey Crush 80 (Wired) V3 Per-Key",
-      "version": "3.0",
+      "version": "3.2",
       "targetMode": "Wired USB (PID 0x5055)",
       "file": "SignalRGB/WobkeyCrush80_v3.js",
       "destinationFile": "WobkeyCrush80_v3.js",
-      "description": "Per-key RGB plugin for per-key firmware. Remove older wired Crush 80 custom plugins before installing.",
-      "sha256": "9377d3b9d5f3c9bbe616b276ec29695774923353eca4d7940f7894aaa1bf9ce1",
+      "description": "Frame-streaming per-key plugin with one acknowledgement per complete frame and optional timing diagnostics. Requires the PKRG v2 firmware upgrade; older per-key firmware is rejected before lighting writes.",
+      "sha256": "7164ffeb6040e0c2ecf3f9acdda26e03d8ffcc9b34040d5907c8e34894559652",
       "recommended": false
     },
     {
       "id": "crush80-wireless-v3-per-key",
       "name": "Wobkey Crush 80 (Wireless) V3 Per-Key",
-      "version": "3.0",
+      "version": "3.1",
       "targetMode": "2.4G Wireless Dongle (PID 0x5088)",
       "file": "SignalRGB/WobkeyCrush80Wireless_v3.js",
       "destinationFile": "WobkeyCrush80Wireless_v3.js",
-      "description": "Experimental per-key plugin for the 2.4G dongle; wireless forwarding, performance, and sleep/wake behavior are unverified. Requires per-key firmware on the keyboard; do not flash firmware onto the dongle.",
-      "sha256": "845ddcfa4f5320dd064a4846263ae22ad40b1a971807c9df5cd63d076165abc3",
+      "description": "Experimental per-key plugin for the 2.4G dongle using acknowledged configuration chunks, not the wired streaming commands. Requires PKRG v2 firmware on the keyboard; radio forwarding and sleep/wake are unverified. Never flash keyboard firmware onto the dongle.",
+      "sha256": "c4e5ce2aed38f872723177449664517dd8d79939d6b2c9d936de1d803cda342b",
       "recommended": false
     }
   ]

@@ -11,8 +11,20 @@ confirmed **Esc green and F1 blue** on 2026-09-25.
 
 All 92 supplied RGB slots were written and read back through the real device;
 the Esc/F1 check proves that host-supplied values reach the physical LEDs.
-Streaming performance, complete physical key mapping, and wireless operation
-remain unverified. Per-key data is volatile, not persisted across power cycles.
+The original Windows plugin measured about 14 FPS; host-side batching reached
+17–18 FPS. The new **PKRG v2 frame-streaming firmware** was flashed with user
+approval and verified over real wired USB on 2026-09-26. Native Linux frame
+delivery averaged 13.96 ms in a 120-frame sample; this is not Windows FPS or
+physical LED refresh. It requires matching updated plugins/host tools.
+SignalRGB 2.5.54+e862907d subsequently reported 24.67 ms work and 33.36 ms gap
+for 120 frames, with no meaningful throughput gain. The user's native Windows
+HIDAPI benchmark then averaged **24.983 ms per transfer**, also outside SignalRGB;
+the dominant write cost therefore persists without the plugin. The separate
+33 ms SignalRGB gap remains a constraint. See the
+[investigation wrap-up](#performance-investigation-wrap-up-2026-09-26) for evidence,
+hypotheses, and remaining questions. Physical appearance/typing, complete key
+mapping, sustained performance, and wireless remain unverified for PKRG v2.
+RGB data remains volatile.
 
 ## Verified device and baseline
 
@@ -236,7 +248,7 @@ protocol offsets are not an implementation specification.
 Saved per-key profiles, Bluetooth, 2.4 GHz throughput, and a SignalRGB plugin
 are separate capabilities; the diagnostic proves none of them.
 
-## Working USB patch design
+## Original working USB patch design (PKRG v1, historical)
 
 ### Owned storage and startup
 
@@ -340,6 +352,78 @@ Unicorn for machine-code regression checks.
    the user and record the observed result below. Do not claim streaming
    throughput or complete physical key mapping from this two-key check.
 
+## Frame streaming (PKRG v2)
+
+The current builder emits `firmware_per_key_v3.bin`. It preserves the existing
+32-byte VIA HID reports, USB descriptors, ordinary VIA configuration, hue fix,
+and OTA interface. It does **not** change SignalRGB's frame scheduling.
+Current host tools/plugins require protocol version 2 before any lighting
+writes; the old `firmware_per_key_v2.bin` remains a rollback artifact, not the
+target of the current builder.
+
+### Frame ownership and activation
+
+Both startup paths reserve and zero **608 bytes**, lowering initial SP to
+`0x9FDA0`. There are two 276-byte RGB buffers at `0x9FDA0` and `0x9FEB4`.
+Metadata begins at `0x9FFC8`: active-buffer offset (0 or 276), expected next
+fragment, frame ID, and pending state. A private 32-byte ACK buffer occupies
+`0x9FFD8..0x9FFF7`; the mode flag remains at `0x9FFFC`.
+
+Fragments fill only the inactive buffer. A complete commit while enabled is
+queued until the OEM lighting-function entry at `0xA104`, before per-LED work.
+That hook switches the active offset once, then attempts the ACK through the
+OEM endpoint writer at `0xCA78`. Busy/unavailable USB retains the pending ACK
+for a later invocation; the hook never spins waiting for the endpoint. An
+ACK means the complete RGB buffer is active, **not** that the physical LED
+scanout has completed. With per-key mode disabled, commit switches immediately
+and responds through the normal VIA path; no lighting callback is required.
+
+The store splice at `0xAA3C` reads from the active buffer and preserves OEM
+brightness scaling. The entry hook preserves all registers it and the USB
+helper modify, then replays the displaced OEM prologue. The existing BSS,
+OEM framebuffer, and USB report buffer are unchanged. This is an explicit
+stack reservation, not proof of worst-case hardware stack usage; the added
+reservation and firmware timing still need physical validation.
+
+### Wire contract
+
+Requests below are **32-byte payloads**, zero padded. HID host APIs add the
+existing leading report-ID zero, making a 33-byte host buffer. Capability
+GET `[8,127,0]` returns `PKRG` at bytes 4..7, version **2** at byte 8, 92 LEDs
+at byte 9, configuration chunk limit 8 at byte 10, enable state at byte 11,
+stream fragment capacity **9 LEDs** at byte 12, and **11 fragments** at byte 13.
+Mode GET/SET and RGB chunk GET/SET retain their layouts from the historical
+table; chunk accesses use the active buffer. SET mode/chunk is rejected with
+status 5 while a frame commit or its ACK remains pending.
+
+| Request | Payload | Response |
+|---|---|---|
+| SET 3: fragment | `[7,127,3,frame_id,index,RGB...]` | None on the wired route, including malformed fragment sequences |
+| SET 4: commit | `[7,127,4,0,frame_id]` | `[7,127,4,status,frame_id,...]`; successful enabled commits reply only after activation |
+
+Fragment indices are 0..10, in order, with the same one-byte frame ID.
+Indices 0..9 carry 27 RGB bytes each; index 10 carries the final six RGB bytes.
+Fragment 0 starts/restarts a staged frame. Missing, duplicate nonzero,
+out-of-order, mixed-ID, or out-of-range fragments cannot complete it. Invalid
+sequences stay invalid until a new fragment 0. A commit requires all 11
+fragments and a matching ID. Status **4** means incomplete/invalid frame;
+status **5** means an earlier commit/ACK is pending. Existing statuses 1..3
+retain their meanings. Streaming operations are rejected on the wireless
+firmware route; its configuration chunk operations remain available.
+
+One changed frame uses **11 silent fragments + one COMMIT = 12 OUT reports**
+and **one IN acknowledgement**. The host waits for that acknowledgement before
+starting another frame; no unbounded queue or implicit retry is introduced.
+Frame IDs wrap modulo 256. USB retains its own transfer error detection and
+handshakes; only the extra per-fragment application responses are removed.
+
+Wired V3 skips an entirely unchanged frame but sends a complete frame when
+any color changes. This trades sparse-update bandwidth for complete-frame
+activation. The Python client's partial `set` reads the active frame, replaces
+the selected colors, and commits/readbacks the whole frame. Ordinary chunk
+SET remains non-atomic for the experimental wireless client; do not run
+multiple controllers against the interface concurrently.
+
 ## Build and use the wired patch
 
 Build from the repository's exact v1.06 hue-patched baseline:
@@ -350,12 +434,12 @@ python3 firmware/tools/patching/patch_firmware_per_key.py
 
 Outputs:
 
-- `firmware/releases/v1.06-per-key/firmware_per_key_v2.bin`: standalone firmware, 122,196 bytes.
-- `firmware/releases/v1.06-per-key/code_2M_per_key_v2.bin`: matching 2 MiB OTA wrapper.
-- Firmware CRC footer: `0xE5BE2E50`.
+- `firmware/releases/v1.06-per-key/firmware_per_key_v3.bin`: standalone firmware, 122,196 bytes.
+- `firmware/releases/v1.06-per-key/code_2M_per_key_v3.bin`: matching 2 MiB OTA wrapper.
+- Firmware CRC footer: `0x5954FF66`.
 - Standalone SHA-256:
-  `f7c1a736b8172db26ba07f6eba2b094b607e8067c91e2f1807eba767e630a7cc`.
-- Injected code uses 632 of the verified 1,220 cave bytes.
+  `1e23e5352c4c9780728503fe989521437c380a39046c26ae2bbd8c1119353362`.
+- Injected code uses 1,132 of the verified 1,220 cave bytes.
 
 The builder rejects other baseline images rather than guessing new offsets.
 It does not connect to or flash the keyboard.
@@ -365,9 +449,9 @@ under a filename that does not overwrite an earlier backup:
 
 ```sh
 python3 host/linux/via_backup.py save /path/to/pre-per-key-backup.json
-python3 host/linux/flash_ota.py --dry-run firmware/releases/v1.06-per-key/firmware_per_key_v2.bin
+python3 host/linux/flash_ota.py --dry-run firmware/releases/v1.06-per-key/firmware_per_key_v3.bin
 # Only after accepting the recovery risk described above:
-python3 host/linux/flash_ota.py firmware/releases/v1.06-per-key/firmware_per_key_v2.bin
+python3 host/linux/flash_ota.py firmware/releases/v1.06-per-key/firmware_per_key_v3.bin
 python3 host/linux/via_backup.py restore /path/to/pre-per-key-backup.json
 ```
 
@@ -375,6 +459,13 @@ The restore command now compares current keycodes, restores changed entries
 including `0x0000` and `0xFFFF`, and verifies every restored keymap byte. A
 failed restore produces a failing exit status. Keep the original backup even
 after a successful restore.
+
+The v2 streaming image has passed wired USB flash/readback checks; physical
+appearance, normal typing, and sustained Windows behavior still need confirmation.
+Preserve the previous plugin file outside SignalRGB's Plugins folder and keep
+`firmware/releases/v1.06-per-key/firmware_per_key_v2.bin` for rollback. A rollback
+also requires the older PKRG v1 plugin/host revision; current clients reject it.
+Flashing remains an explicit operator action, not part of plugin initialization.
 
 The following commands use the wired VIA interface only. Capability discovery
 must succeed before the tool sends any per-key SET request:
@@ -402,10 +493,11 @@ python3 host/linux/per_key_rgb.py frame /path/to/frame.json
 python3 host/linux/per_key_rgb.py read
 ```
 
-Uploads are chunked, not atomically double-buffered. No frame-rate guarantee
-has been measured. `read` returns supplied RGB values, before global
-brightness scaling; maximum firmware brightness is 192/256 of the supplied
-channel value. Black remains black, and neutral RGB values stay neutral.
+Wired uploads use the complete-frame activation protocol described above.
+No frame-rate guarantee has been measured for this firmware. `read` returns
+supplied RGB values, before global brightness scaling; maximum firmware
+brightness is 192/256 of the supplied channel value. Black remains black,
+and neutral RGB values stay neutral.
 
 The [C#/.NET SDK and safe sample](../../sdk/dotnet/README.md) provide a separate
 wired per-key client. Their Windows/Linux/macOS builds and CI are hardware-free;
@@ -419,19 +511,82 @@ python -m venv /tmp/wobkey-per-key-tests
 /tmp/wobkey-per-key-tests/bin/python -m unittest discover -s tests -v
 ```
 
-Seventeen regressions passed during implementation. They cover generated
-machine code, both startup paths, full effect-6 rendering, register
-preservation, protocol bounds, host-client frame round trips, stock-firmware
-rejection, and exact restoration of disabled/default keys. The original
-firmware failed capability discovery and stack-reservation expectations; the
-original restore routine failed the disabled/default-key regression.
+Regressions execute generated RV32 instructions: both startup paths, full
+effect-6 rendering, register preservation, configuration bounds, silent
+fragments, incomplete/mixed/reordered frame rejection, deferred ACKs, USB
+unavailability, frame-ID wrap, and commits arriving during an existing render.
+The real host client uses that emulator for full-frame and partial updates.
+VIA restore tests retain exact restoration of disabled/default keycodes.
 
-The actual host CLI also rejected the previously installed diagnostic image
-without sending RGB changes, and the existing flasher accepted the working
-image in dry-run mode. These are offline/transport-preflight results, not
-physical confirmation of the working host-driven firmware.
+The actual wired JavaScript was also driven against the generated RV32 handler,
+activation hook, USB ACK helper, and effect-6 renderer. Three distinct frames
+each used 12 OUT reports and one IN reply; all 92 raw RGB slots and all 276
+scaled framebuffer bytes matched. An unchanged frame sent no reports, and
+shutdown restored RGB, mode, effect, and brightness. Host USB scheduling and
+OEM configuration calls were modeled; this does not establish hardware timing.
 
-## Working-patch hardware verification, 2026-09-25
+The generated standalone image reproduces exactly from the builder, its CRC
+passes the OTA loader, and the OTA wrapper differs from the baseline only in
+its firmware payload. The USB configuration descriptor is unchanged. The
+subsequent approved hardware flash and real-device results are recorded below.
+
+## PKRG v2 hardware verification, 2026-09-26
+
+After explicit user approval, the OTA tool transferred all **2,546 packets**
+in **18.2 seconds**, reported OTA success, and the keyboard re-enumerated.
+The non-updating OEM identity request reported CRC **`0x5954FF66`**, matching
+the new image. VIA remained protocol 11. PKRG discovery returned version 2,
+92 slots, configuration chunks of eight, and 11 streaming fragments of nine
+LEDs. Startup had the override disabled and all 92 supplied RGB slots zero.
+
+Fresh backups were saved outside the repository:
+
+```text
+~/.local/state/wobkey/via-before-streaming-20260926T125040-f619d8fc.json
+~/.local/state/wobkey/perkey-before-streaming-20260926T125040-f619d8fc.json
+```
+
+VIA backup SHA-256:
+`3f48c1df0ffef3cc8c49898d10ceb1c7dad3744f8fe29bbdb325428eed60c000`.
+Per-key backup SHA-256:
+`b567e5f821f2d088a24eeb0017777be84f9dd6734ec87f6f0424d63b1fd24add`.
+The prior image reported CRC `0xE5BE2E50` (PKRG v1).
+
+The flash changed **31 keymap entries**. Restoration wrote those entries and
+verified all **1,024 keymap bytes**. Brightness 9, effect 6, speed 2, hue 165,
+and saturation 255 were restored/read back. The separately backed-up per-key
+colors and disabled override state were also restored.
+
+Real-device checks:
+
+- A complete frame committed while disabled and read back correctly for all
+  92 slots; no lighting callback was required.
+- Three enabled frames committed and read back correctly.
+- Omitting fragment 5 produced COMMIT status 4 and left the preceding active
+  frame unchanged.
+- A 120-frame native Linux hidraw sample received exactly 120 matching frame
+  ACKs, with 12 OUT reports per frame and no extra replies. Four full-frame
+  readback probes also matched. Mean write time was **12.78 ms**, mean ACK wait
+  **1.17 ms**, and mean complete transfer **13.96 ms** (range 13.91–14.95 ms).
+  These timings exclude the readback probes and any SignalRGB scheduling gap.
+- The actual wired V3 JavaScript ran through a direct Linux hidraw adapter,
+  not a simulated endpoint. Three distinct frames each produced **12 writes
+  and one reply**, and all 92 RGB values matched. An unchanged frame performed
+  no I/O. Shutdown restored the exact captured RGB/mode/effect/brightness.
+- After all probes, every keymap byte, OEM lighting value, per-key color, and
+  override state was checked again against the pre-flash backups and matched.
+
+The keyboard was left with PKRG v2 installed and its prior lighting state
+restored, including **override disabled**. No streaming profile was persisted.
+Physical LED appearance and normal typing require user confirmation. These
+Linux results do not prove Windows SignalRGB FPS, physical scanout cadence,
+long-duration stability, or wireless behavior. The 30 FPS target is not yet
+verified inside SignalRGB.
+
+## Original PKRG v1 hardware verification, 2026-09-25
+
+This section records the earlier `firmware_per_key_v2.bin` and its matching
+host/plugin revision. It does not validate the new streaming image.
 
 With explicit user authorization, the working image was flashed successfully.
 The OEM identity query after reboot reported **CRC `0xE5BE2E50`**, matching the
@@ -474,14 +629,14 @@ wireless behavior, and animation throughput remain unverified.
 ## SignalRGB V3 per-key plugin
 
 `plugins/signalrgb/wired/WobkeyCrush80_v3.js` is a standalone **wired USB** plugin for the
-working per-key firmware above. It does not support the 2.4 GHz dongle or
+PKRG v2 streaming firmware above. It does not support the 2.4 GHz dongle or
 Bluetooth and does not flash firmware. V1/V2 plugins remain available for
-older firmware; do not run an older wired plugin alongside V3.
+hue-patched firmware; do not run an older wired plugin alongside V3.
 
 ### Install
 
-1. Keep the working per-key firmware installed; the hue-only images do not
-   expose the required `PKRG` protocol.
+1. Back up VIA configuration before upgrading to `firmware_per_key_v3.bin`.
+   The original per-key image exposes PKRG v1 and is rejected by this plugin.
 2. In SignalRGB, open the Crush 80's **Device Information → Plugins** folder.
 3. Move older wired custom plugins for this keyboard out of that folder.
    Renaming them while leaving a `.js` extension in the same folder is not
@@ -492,14 +647,14 @@ older firmware; do not run an older wired plugin alongside V3.
    on the SignalRGB canvas. Adjust its size/position in the layout as needed.
 
 The Windows installer catalog includes wired and experimental wireless V3 plugin
-entries. Older firmware images do not expose the per-key protocol; keep the
-working per-key image selected when using V3.
+entries. Both now require PKRG v2; select the matching streaming image rather
+than the older per-key or hue-only images. Visual and sustained runtime checks remain pending.
 
 ### Behavior
 
 - Opens only interface 1, usage page `0xFF60`, usage `0x61`.
-- Requires the capability signature, protocol version, 92-slot count, and
-  eight-slot chunk limit before sending any lighting writes.
+- Requires PKRG version 2, 92 LEDs, eight-slot configuration chunks, and the
+  nine-LED/11-fragment streaming format before sending any lighting writes.
 - Captures the current OEM effect, brightness, per-key enable state, and all
   92 RGB values before taking control.
 - Uses direct RGB from `device.color(x, y)`: black is transmitted as black,
@@ -507,16 +662,243 @@ working per-key image selected when using V3.
 - Uses effect 6 and hardware brightness 9 while streaming. SignalRGB already
   applies its brightness setting to sampled colors, so V3 does not apply it
   a second time.
-- Sends only changed eight-slot chunks, including the final four-slot chunk,
-  and checks every acknowledgement. It does not cache a failed write as sent.
+- Sends a complete frame only when colors change, using 11 silent fragments
+  and one acknowledged COMMIT. The cache advances only after a successful
+  reply matching the submitted frame ID; no unacknowledged frame is cached.
 - On graceful shutdown or streaming disable, restores the captured RGB array,
-  enable state, effect, and brightness. A transport error stops streaming and
-  attempts restoration; unplugged hardware cannot be restored until reachable.
+  enable state, effect, and brightness. It disables per-key mode before
+  restoring the RGB frame so commit does not depend on lighting callbacks.
+- A transport error stops streaming. Before restoration, it waits for any
+  outstanding commit reply with the correct frame ID; stale/foreign replies
+  do not count as completion. Recovery is bounded by the existing 100 ms
+  timeout. If the reply remains unavailable, restoration is deferred rather
+  than confusing a late frame ACK with a MODE reply. Unplugged hardware may
+  remain unrestorable; reconnection is not proof that an old reply will arrive.
 - Does not send SAVE, OTA, wireless-control, or reset commands.
 
 Do not run VIA, the Python RGB tool, or another RGB controller against the
 same interface while SignalRGB is streaming. Transport errors are reported
 in the device console; fix the conflict and toggle streaming to reinitialize.
+
+### Windows measurements and the 30 FPS target
+
+The user verified the original wired plugin on Windows: about **14 FPS**,
+**35 ms frame work**, and **32 ms inter-frame delay**. Host-side batching on
+the same PKRG v1 firmware improved the Inspector trace to **17–18 FPS**.
+Five timing windows (600 full frames) then averaged **23.40 ms write**,
+**1.14 ms ACK**, **24.54 ms total work**, and **33.38 ms outside Render()**.
+These are measurements of the older batched plugin, not this new firmware.
+
+The new protocol keeps 12 OUT reports per full frame but reduces firmware
+responses from 12 to one. In SignalRGB **2.5.54+e862907d**, the user then supplied
+a 120-frame sample: **23.40 ms write**, **1.27 ms ACK**, **24.67 ms work**, and
+**33.36 ms gap**, with 11 data chunks plus COMMIT per frame. This implies about
+17.23 FPS: no meaningful improvement over the earlier batching sample.
+Consequently, firmware response backpressure is not supported as the dominant
+Windows bottleneck. The same firmware's native Linux probe averaged 13.96 ms
+per complete transfer. The subsequent native Windows HIDAPI run averaged
+24.983 ms, showing that the roughly 25 ms transfer cost persists without
+SignalRGB. Neither native benchmark isolates SignalRGB's outside-Render gap;
+the [wrap-up below](#performance-investigation-wrap-up-2026-09-26) separates those
+two constraints and records the remaining hypotheses.
+
+To measure after an explicitly authorized firmware upgrade:
+
+1. Back up VIA settings, install the matching PKRG v2 firmware and wired V3
+   plugin, restore/read back configuration, then restart SignalRGB.
+2. First check independent colors, black/white, normal typing, and restoration
+   when streaming is disabled. Stop on transport errors or incorrect output.
+3. Use the same animated effect/layout as the baseline. Enable **Log frame
+   timing (diagnostic)**. Every 120 successful Render calls, the device console
+   reports `chunks/frame`, `prepare`, `write`, `ack`, `work`, and `gap`.
+   A fully changing effect now reports **11 data chunks/frame**, excluding its
+   additional COMMIT report. An unchanged frame sends no reports.
+4. Run for at least 60 seconds and capture the Inspector graphs plus several
+   timing lines. `write` includes packing and COMMIT; `ack` includes activation
+   waiting, reply validation, and cache updates. `gap` includes work/waiting
+   outside Render(), not just a precisely measured thread sleep. Measurements
+   use JavaScript's millisecond clock and are averaged.
+5. Turn timing diagnostics off after measurement; they are off by default.
+
+**30 FPS remains a target, not a verified result.** The total frame budget is
+33.3 ms, so the measured 33.38 ms outside Render() remains an independent
+constraint. This firmware does not override SignalRGB scheduling or promise
+the physical LED scanout rate. Do not shorten response timeouts or discard
+frame acknowledgements to improve the displayed number.
+
+### Native Windows HID benchmark
+
+`host/windows/benchmark_per_key_rgb.py` sends the same 11 data fragments plus
+COMMIT through [HIDAPI's Python binding](https://pypi.org/project/hidapi/), outside
+SignalRGB. It opens only `320F:5055`, interface 1, usage page `0xFF60`, usage
+`0x61`, and requires PKRG v2 before changing lighting. It does not open the OTA
+or wireless-control interface, change drivers, flash, write keymaps, or SAVE.
+
+Use an **updated Windows copy of the repository**, not just a downloaded
+plugin: the benchmark imports the existing protocol client in `host/linux/`.
+Python 3.10 or newer is required. Close SignalRGB completely from its tray menu
+and close VIA/other keyboard controllers. Keep the keyboard on the same wired
+USB port used for the SignalRGB measurement.
+
+Open PowerShell in the repository root and run:
+
+```powershell
+py -3 -m venv "$env:LOCALAPPDATA\WobkeyBench"
+& "$env:LOCALAPPDATA\WobkeyBench\Scripts\python.exe" -m pip install --only-binary=:all: hidapi==0.15.0
+& "$env:LOCALAPPDATA\WobkeyBench\Scripts\python.exe" .\host\windows\benchmark_per_key_rgb.py --frames 600
+```
+
+The script temporarily uses per-key lighting and snapshots/restores all 92
+RGB values, enable state, brightness, and effect. Normal completion verifies
+the restored state. Ctrl+C/errors attempt restoration, but unplugging or
+force-closing the process can prevent it. Let it finish and retain any error
+output. No additional firmware flash is needed.
+
+If an older benchmark stops at `Measuring ...` before changing any lighting,
+replace `host/windows/benchmark_per_key_rgb.py` with the current version.
+The original buffer drain passed timeout zero to `hid.device.read`, but
+[cython-hidapi 0.15.0](https://github.com/trezor/cython-hidapi/blob/0.15.0/hid.pyx)
+uses the untimed `hid_read()` for zero, not `hid_read_timeout(..., 0)`.
+With blocking mode enabled, the initial empty-queue drain never returned.
+The current adapter uses a minimum positive **1 ms** timeout for drains;
+the timed frame ACK timeout remains **100 ms**. Drains are outside the measured
+frame interval. Stop the old Python process before restarting the corrected
+script; this particular startup hang occurs before any lighting writes.
+
+Output includes Windows/Python/HIDAPI versions and mean/median/p95/max for
+**Write**, **ACK**, and **Total transfer**, plus restoration verification.
+Ten warmup frames are excluded by default. Frame generation, setup, periodic
+full RGB readback probes, and restoration are outside the timed regions;
+there is no artificial inter-frame sleep. These are host transfer timings,
+not SignalRGB FPS or physical LED refresh.
+
+The benchmark CLI and restoration/failure paths were exercised against the
+actual firmware instruction emulator on Linux. The user then completed the
+Windows hardware run recorded below; this was not an assistant-side Windows run.
+
+### Performance investigation wrap-up, 2026-09-26
+
+**Status: paused with a measured bottleneck split, not a 30 FPS result.**
+Host-side batching improved the original Windows plugin from about 14 FPS to
+17–18 FPS. The subsequent PKRG v2 firmware provides complete-frame activation
+and one commit acknowledgement, but did not materially increase Windows
+SignalRGB throughput. The native Windows comparison now establishes that
+the approximately 25 ms transfer cost also occurs outside SignalRGB.
+
+#### What we investigated
+
+1. **Original plugin and host-side batching.** The original plugin performed
+   12 sequential write/acknowledgement exchanges per fully changed frame.
+   Batching on PKRG v1 reduced observed frame work from about 35 ms to
+   24.54 ms; the approximately 33 ms gap outside `Render()` remained.
+2. **Firmware response backpressure.** PKRG v2 retained 12 OUT reports but
+   replaced per-fragment replies with 11 silent fragments and one COMMIT ACK.
+   Double buffering and frame-boundary activation prevent partial frames from
+   becoming visible. Emulator checks and wired hardware probes exercised
+   complete delivery, rejected incomplete frames, RGB readback, and restoration.
+   SignalRGB still measured 24.67 ms work plus a 33.36 ms gap: removing those
+   replies did not remove the dominant Windows cost.
+3. **Native Linux comparison.** The same firmware accepted 120 measured
+   frames at 13.96 ms mean complete-transfer time, with matching ACKs and RGB
+   readback. This argues against an unavoidable 25 ms firmware transfer floor;
+   it does not establish physical LED refresh or isolate host/controller differences.
+4. **Native Windows comparison.** A separate HIDAPI Python CLI sent the same
+   11 fragments plus COMMIT, excluding color/packet generation and readback
+   from the measured interval. This tests whether the transfer cost requires
+   SignalRGB, not whether every Windows backend or USB topology behaves alike.
+5. **Benchmark startup hang.** The first CLI version incorrectly treated
+   timeout zero as a non-blocking read. In cython-hidapi 0.15.0 it instead
+   selects untimed `hid_read()`, hanging the initial empty-queue drain in
+   blocking mode before lighting writes. The adapter now uses a minimum
+   positive 1 ms timeout. Regression coverage models that binding behavior;
+   drains remain outside frame timing and the frame ACK timeout stays 100 ms.
+
+#### User's native Windows result
+
+The user supplied this completed run of `python .\benchmark_per_key_rgb.py`
+after the drain fix. Its console output is retained here rather than relying
+on the temporary log file:
+
+```text
+Platform: Windows-11-10.0.26200-SP0 / Python 3.14.5
+HIDAPI Python binding: 0.15.0
+Device: 320F:5055, interface 1, usage FF60:0061
+SignalRGB and VIA must be closed. Lighting will change temporarily.
+Measuring 120 full frames after 10 warmup frames...
+
+Frames: 120; 12 OUT reports + 1 ACK per frame
+Full RGB readback checks: 5 (outside timed regions)
+Phase (ms)            Mean    Median       P95       Max
+Write               23.927    23.928    23.969    24.014
+ACK                  1.056     1.032     1.064     2.084
+Total transfer      24.983    24.960    24.997    26.004
+Lighting restoration: verified (RGB, enable state, brightness, effect).
+No artificial frame delay. These are transfer timings, not SignalRGB FPS or LED refresh.
+```
+
+All five full RGB readback checks completed, and the benchmark verified the
+captured RGB values, override state, brightness, and effect after restoration.
+The measured transfer time was stable in this sample, with p95 24.997 ms.
+It does not establish long-duration reliability or visually verified scanout.
+
+#### Hypotheses and disposition
+
+| Hypothesis | Evidence and current disposition |
+|---|---|
+| Sequential per-chunk host exchanges cost significant time. | Supported by the initial batching improvement: about 35 ms to 24.54 ms of frame work on PKRG v1. This optimization is already implemented. |
+| Firmware per-fragment reply backpressure dominates the remaining Windows cost. | Not supported as the dominant cause: PKRG v2 reduced replies from 12 to one without a meaningful Windows throughput gain. |
+| SignalRGB-specific JavaScript or packet preparation dominates the approximately 25 ms transfer. | Not supported as the dominant cause: the native Windows benchmark excludes packet generation and still takes 24.983 ms, versus SignalRGB's 24.67 ms work interval. The intervals are not identical, so this is not a precise measurement of plugin overhead. |
+| The final COMMIT ACK is the main bottleneck. | Not supported: native Windows ACK wait averaged 1.056 ms; writes account for 95.8% of the measured transfer. ACK time is residual waiting after writes, not an isolated firmware execution measurement. |
+| Windows HID/USB scheduling, synchronous report submission/completion, the controller/hub, or device readiness under that path impose a per-report cadence. | **[INFERENCE] Plausible, not isolated.** Writes average 23.927 / 12 = 1.994 ms per report. This is an aggregate, not a per-report trace or proof of a 2 ms endpoint polling interval. Both Windows applications share lower layers. The faster Linux result does not by itself distinguish OS, backend, or topology effects. |
+| SignalRGB adds a separate scheduling/work gap outside `Render()`. | The approximately 33 ms interval is measured and remains an independent constraint. Its internal cause is unresolved; `gap` includes all work/waiting outside the callback, not a proven fixed sleep. |
+
+#### Frame budget and remaining investigation
+
+Using the native Windows transfer mean and the previous SignalRGB gap gives
+`1000 / (24.983 + 33.36) = 17.14 FPS`, consistent with the roughly 17 FPS
+observations. This combines separate samples, not a new measured SignalRGB run.
+The reciprocal of the transfer interval alone is approximately 40 frames/s;
+that is a transfer-only budget, not observed application FPS or LED scanout.
+
+At 30 FPS, the total budget is 33.33 ms. With a 24.983 ms transfer, everything
+else must fit in approximately **8.35 ms**. Even Linux-like 13.96 ms transfers
+would yield only approximately **21.13 FPS** if the 33.36 ms gap remained.
+
+When investigation resumes:
+
+1. Prioritize SignalRGB's outside-`Render()` scheduling/work interval, keeping
+   the same animated effect and layout. Identify a supported way to reduce
+   that interval rather than assuming a particular sleep or undocumented API.
+2. Capture Windows USB submission/completion timing for the VIA interface
+   during the native benchmark. Inspect the actual descriptors and transfer
+   route, and correlate report timing with synchronous write durations before
+   attributing the approximately 2 ms average to endpoint polling.
+3. Control host/controller/port/hub differences in subsequent comparisons.
+   Any faster transport or firmware proposal must retain complete-frame
+   delivery checks and restoration, then demonstrate a measured improvement.
+
+No USB trace or scheduling fix has been validated in this investigation.
+These results do not justify another firmware redesign or flash on their own.
+Shorter response timeouts or discarding the final ACK would not address the
+dominant measured write cost or the independent SignalRGB gap.
+
+#### Wrap-up verification
+
+Pre-commit checks passed 35 Python regressions, 17 wired-plugin regressions,
+and nine wireless-plugin regressions (eight wired-only cases were skipped).
+The firmware builder reproduced both release binaries exactly, and the OTA
+loader accepted both CRCs. The benchmark CLI completed setup, frame delivery,
+readback, and restoration against the firmware emulator. These offline checks
+are separate from the user's Windows hardware timing above.
+
+The Windows installer cross-built on Linux with zero warnings/errors; its
+packaged PKRG v2 firmware and both V3 plugin hashes matched the catalog.
+The Windows GUI was not exercised. A broader packaging check also found
+stale catalog hashes for the four legacy V1/V2 plugins. Each mismatch was
+already present in `d4e1b6d`, with both the plugin source and its catalog hash
+unchanged by this work. That unrelated metadata issue was left unchanged,
+not counted as a passing integrity check. No keyboard was opened or flashed
+during wrap-up.
 
 ### Layout evidence
 
@@ -541,14 +923,15 @@ or alternate PCB layout. Underglow is outside this 92-slot renderer.
 node --experimental-vm-modules --test tests/test_signalrgb_v3.mjs
 ```
 
-Eight JavaScript regressions pass for each V3 variant: independent
-black/white/RGB rendering, incompatible-firmware rejection without writes,
-restoration of prior OEM and per-key states, changed-chunk behavior, error
-recovery, functional key bindings/endpoint selection, transport identity,
-and missing capability replies. Node emits its expected experimental-VM warning.
+JavaScript regressions cover independent black/white/RGB rendering,
+incompatible-firmware rejection without writes, restoration of prior OEM and
+per-key states, unchanged-frame skipping, functional key bindings/endpoint
+selection, and missing or malformed replies. Wired-specific cases cover lost
+fragments, stale/late/unavailable frame ACKs, frame-ID wrap, old-protocol
+rejection, and failed fragment writes. Node emits its expected experimental-VM warning.
 
-The unchanged V3 JavaScript was also executed through a temporary native-HID
-bridge against the connected keyboard:
+Before batching was introduced, the original V3 JavaScript was also executed
+through a temporary native-HID bridge against the connected keyboard:
 
 - Three distinct canvas frames each produced correct readback for all 92
   supplied RGB values, using 12 RGB packets per changed full frame.
@@ -559,9 +942,10 @@ bridge against the connected keyboard:
   lifecycle checks.
 
 **The Windows SignalRGB application itself was not run in this environment.**
-The user subsequently reported that wired V3 works flawlessly. This is a
-user-confirmed application result, separate from the automated native-HID
-bridge checks; no sustained frame-rate measurement was recorded.
+The user supplied real measurements for both the original sequential plugin
+and the host-batched PKRG v1 plugin. PKRG v2 has real Linux USB frame and
+plugin-lifecycle verification, plus the user's 120-frame Windows timing sample
+above. Visual/typing confirmation and sustained runtime checks remain outstanding.
 
 Primary API references:
 
@@ -575,15 +959,15 @@ Primary API references:
 
 `plugins/signalrgb/wireless/WobkeyCrush80Wireless_v3.js` targets the **2.4 GHz dongle** at
 VID:PID `320F:5088`, interface 1, usage page `0xFF60`, usage `0x61`.
-It uses the same per-key protocol, layout, changed-chunk handling, and state
-restoration as wired V3. Only device identity, connection guidance, and log
-labels differ. It is a standalone plugin; no shared JavaScript module is
-required in the custom Plugins folder.
+It uses the PKRG v2 configuration operations, the same layout, and acknowledged
+eight-slot RGB chunks with state restoration. It **does not use** the wired
+silent-fragment/commit commands, which firmware rejects on the wireless route.
+It is a standalone plugin; no shared JavaScript module is needed.
 
 ### Install and try
 
-1. Leave the working per-key firmware installed on the **keyboard**.
-   No new firmware is needed for this experiment.
+1. This plugin revision requires `firmware_per_key_v3.bin` (PKRG v2) on the
+   **keyboard**. Do not install the image on the dongle. Hardware support is unverified.
 2. Open SignalRGB's **Device Information → Plugins** folder and move older
    Crush 80 **wireless** custom plugins out of it.
 3. Copy `WobkeyCrush80Wireless_v3.js` into that folder.
@@ -631,11 +1015,10 @@ SIGNALRGB_TEST_PLUGIN=plugins/signalrgb/wireless/WobkeyCrush80Wireless_v3.js \
 node --experimental-vm-modules --test tests/test_signalrgb_v3.mjs
 ```
 
-All eight lifecycle/protocol regressions passed for wireless V3 and all eight
-passed for wired V3. A separate offline lifecycle smoke run exercised the
-actual wireless JavaScript through a stateful HID simulation: three varying
-92-slot frames, an unchanged frame with zero RGB writes, and complete prior
-state restoration on shutdown.
+The shared lifecycle/protocol checks run against the wireless endpoint model;
+wired-only streaming checks are skipped for this variant. Its packet flow
+remains sequential. The capability requirement was updated to PKRG v2; this
+does not constitute new evidence of radio forwarding or wireless operation.
 
 No `320F:5088` dongle was available to this environment, so these checks are
 **not** proof of radio forwarding, over-air throughput, or wireless operation

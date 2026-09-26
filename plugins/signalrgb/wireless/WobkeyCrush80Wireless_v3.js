@@ -1,7 +1,7 @@
 /**
  * Wobkey Crush 80 2.4 GHz dongle per-key RGB, V3.
  * Wireless forwarding, performance, and sleep/wake behavior are unverified.
- * Requires `firmware/releases/v1.06-per-key/firmware_per_key_v2.bin` (PKRG protocol version 1).
+ * Requires `firmware/releases/v1.06-per-key/firmware_per_key_v3.bin` (PKRG protocol version 2).
  * No firmware flashing, wireless-mode commands, or EEPROM saves.
  *
  * LED indices: v1.06 matrix table at 0x1BC74. Geometry is an ANSI TKL layout;
@@ -16,7 +16,7 @@ export function Type() { return "hid"; }
 export function Size() { return [37, 12]; }
 export function DefaultLayout() { return "Default"; }
 export function DeviceMessage() {
-    return ["2.4 GHz per-key RGB: requires the keyboard per-key firmware; wireless is unverified.",
+    return ["2.4 GHz per-key RGB: requires keyboard PKRG v2 firmware; wireless is unverified.",
         "Remove older wireless custom plugins. Do not flash keyboard firmware onto the dongle."];
 }
 export function Validate(endpoint) {
@@ -100,10 +100,10 @@ function exchange(payload) {
 
 function capabilities() {
     const reply = exchange([8, CHANNEL, 0]);
-    const expected = [80, 75, 82, 71, 1, LED_COUNT, CHUNK_LEDS]; // PKRG
+    const expected = [80, 75, 82, 71, 2, LED_COUNT, CHUNK_LEDS]; // PKRG
     for (let i = 0; i < expected.length; i++) {
         if (reply[i + 4] !== expected[i]) {
-            throw new Error("Compatible per-key firmware required; no lighting writes sent");
+            throw new Error("Per-key firmware (PKRG v2) required; no lighting writes sent");
         }
     }
     if (reply[11] !== 0 && reply[11] !== 1) throw new Error("Invalid firmware mode flag");
