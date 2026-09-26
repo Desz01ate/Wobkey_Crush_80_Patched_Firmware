@@ -54,3 +54,5 @@ BuildLog.*
 !**/packages/build/
 
 **/.idea/**
+
+.worktrees/
