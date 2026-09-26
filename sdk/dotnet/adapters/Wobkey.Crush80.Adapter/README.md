@@ -41,21 +41,13 @@ The keyboard lighting interface requires exclusive control. Close SignalRGB, VIA
 
 Disposal asks the SDK to restore the captured colors and settings. Restoration cannot be guaranteed after a disconnect, transport or device failure, loss of power, or interference from another writer. Treat open, apply, and cleanup errors as meaningful; inspect the keyboard if an operation or disposal fails. The adapter does not promise atomic frame changes or physical recovery after an error.
 
-## Safe executable sample
+## Hardware sample
 
 From the repository root:
 
 ```sh
-dotnet run --project sdk/dotnet/samples/Wobkey.Crush80.Adapter.Sample/Wobkey.Crush80.Adapter.Sample.csproj -- --help
-dotnet run --project sdk/dotnet/samples/Wobkey.Crush80.Adapter.Sample/Wobkey.Crush80.Adapter.Sample.csproj -- --list
+dotnet run --project sdk/dotnet/samples/Wobkey.Crush80.Adapter.Sample/Wobkey.Crush80.Adapter.Sample.csproj
 ```
 
-`--help` does not access devices. `--list` enumerates descriptors without opening a keyboard or changing lighting (the operating system may still require HID discovery permissions). For an authorized hardware smoke, use `--smoke` to select the SDK's first device or `--smoke <index>` to select an entry from the current enumeration:
+This sample writes to the first discovered keyboard as soon as it starts; it does not provide read-only `--help` or `--list` modes. Opening immediately sends a black frame. The sample then applies Esc red and F1 green, waits for a keypress, and runs a full-layout rainbow animation. The rainbow traverses mapped keys in row-major order through a circular linked list; press another key to stop. Disposal asks the SDK to restore captured state, but physical restoration is not independently verified or guaranteed. Run only when prepared for temporary hardware writes and possible incomplete restoration.
 
-```sh
-dotnet run --project sdk/dotnet/samples/Wobkey.Crush80.Adapter.Sample/Wobkey.Crush80.Adapter.Sample.csproj -- --smoke
-# Or, after checking --list:
-dotnet run --project sdk/dotnet/samples/Wobkey.Crush80.Adapter.Sample/Wobkey.Crush80.Adapter.Sample.csproj -- --smoke 0
-```
-
-The smoke sample requires typing exactly `SMOKE` before it calls `OpenAsync`. Opening immediately sends black; the sample then sets Esc red and the F1 canvas coordinate green and calls `ApplyAsync`. It reports disposal failures separately and does not claim that successful disposal independently verifies physical restoration. Run it only when prepared for temporary hardware writes and possible incomplete restoration.
