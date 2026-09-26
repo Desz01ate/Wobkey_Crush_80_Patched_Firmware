@@ -37,17 +37,31 @@ internal sealed class SmokeFailureReport
             if (error is StateRestoreException restoreError)
             {
                 foreach (var failure in restoreError.Failures)
-                    writer.WriteLine($"  {failure.Field}: {failure.Error.Message}");
+                    WriteExceptionChain(writer, failure.Field, failure.Error, 2);
                 if (restoreError.InnerException is { } original)
-                    writer.WriteLine($"  Original operation: {original.Message}");
+                    WriteExceptionChain(writer, "Original operation", original, 2);
             }
             else if (error.InnerException is { } inner)
             {
-                writer.WriteLine($"  Cause: {inner.Message}");
+                WriteExceptionChain(writer, "Cause", inner, 2);
             }
         }
 
         if (controlAcquisitionStarted && _failures.Count > 0)
             writer.WriteLine("WARNING: restoration could not be verified; check keyboard lighting/settings manually.");
+    }
+
+    private static void WriteExceptionChain(TextWriter writer, string label, Exception error, int indentation)
+    {
+        for (Exception? current = error; current is not null; current = current.InnerException)
+        {
+            for (var i = 0; i < indentation; i++)
+                writer.Write(' ');
+            writer.Write(label);
+            writer.Write(": ");
+            writer.WriteLine(current.Message);
+            label = "Caused by";
+            indentation += 2;
+        }
     }
 }

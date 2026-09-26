@@ -30,6 +30,29 @@ public sealed class SmokeFailureReportTests
     }
 
     [Fact]
+    public void RestoreReportsNestedFieldAndOperationCauses()
+    {
+        var report = new SmokeFailureReport();
+        var transport = new IOException("HID read timed out", new InvalidDataException("malformed reply"));
+        var fault = new SessionFaultedException("RestoreState", innerException: transport);
+        var operation = new InvalidOperationException("readback mismatch",
+            new IOException("USB disconnected", new InvalidDataException("device path vanished")));
+        report.Capture("Explicit restore", new StateRestoreException(
+            [new StateRestoreFailure("Colors", fault)], operation));
+
+        using var output = new StringWriter();
+        report.WriteTo(output, controlAcquisitionStarted: true);
+        var text = output.ToString();
+
+        Assert.Contains("  Colors: The Crush 80 session is faulted and cannot continue.", text);
+        Assert.Contains("    Caused by: HID read timed out", text);
+        Assert.Contains("      Caused by: malformed reply", text);
+        Assert.Contains("  Original operation: readback mismatch", text);
+        Assert.Contains("    Caused by: USB disconnected", text);
+        Assert.Contains("      Caused by: device path vanished", text);
+    }
+
+    [Fact]
     public async Task NonDisconnectFailureAfterAcquisitionWarnsOperator()
     {
         var report = new SmokeFailureReport();
