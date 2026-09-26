@@ -3,8 +3,8 @@ namespace Wobkey.Crush80.Adapter;
 internal readonly record struct Crush80Led(Crush80Key Key, byte X, byte Y);
 
 /// <summary>
-/// Provisional firmware-slot ordering and sparse canvas coordinates from the wired
-/// SignalRGB plugin. Physical key assignments are confirmed only for Esc, F1, and Caps Lock.
+/// Firmware-slot ordering and sparse canvas coordinates derived from the wired SignalRGB plugin;
+/// mapped key assignments and row-major order have since been visually verified on hardware.
 /// </summary>
 internal static class Crush80Layout
 {
@@ -49,4 +49,6 @@ internal static class Crush80Layout
     ];
 
     internal static ReadOnlySpan<Crush80Led> Slots => OrderedSlots;
+    internal static Crush80Key KeyAt(int index) => OrderedSlots[index].Key;
+
 }

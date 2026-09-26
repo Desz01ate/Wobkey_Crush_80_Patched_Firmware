@@ -85,7 +85,7 @@ public sealed class Crush80Keyboard : IAsyncDisposable
         }
     }
 
-    /// <summary>Gets the provisional sparse in-memory grid. Edits do not write to the device.</summary>
+    /// <summary>Gets the physically verified in-memory grid. Edits do not write to the device.</summary>
     public Crush80Grid Grid => _grid;
 
     /// <summary>

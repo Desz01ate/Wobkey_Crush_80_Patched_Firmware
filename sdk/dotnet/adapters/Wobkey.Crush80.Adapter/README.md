@@ -12,7 +12,7 @@ using Wobkey.Crush80.Sdk.Models;
 
 await using var keyboard = await Crush80Keyboard.OpenAsync();
 keyboard.Grid.SetKey(Crush80Key.Esc, new Rgb24(255, 0, 0));
-keyboard.Grid.SetAt(3, 0, new Rgb24(0, 255, 0)); // F1 in the provisional canvas map.
+keyboard.Grid.SetAt(3, 0, new Rgb24(0, 255, 0)); // F1 canvas coordinate.
 await keyboard.ApplyAsync();
 ```
 
@@ -31,11 +31,11 @@ keyboard.Grid.SetKey(Crush80Key.Esc, new Rgb24(255, 0, 0));
 await keyboard.ApplyAsync();
 ```
 
-`OpenAsync(descriptor)` opens that descriptor; it does not silently choose a different device. `Grid.Width` and `Grid.Height` are 37 and 12. `SetKey` edits every LED assigned to a logical enum key, `SetAt(x, y)` edits emitters at a canvas point, and `Fill` edits all 92 frame slots. Coordinates are points on the sparse built-in canvas, not firmware/VIA row-column addresses; gaps have no LEDs. Call `ApplyAsync` to submit the current frame. `await using` disposes the adapter and asks the SDK to restore the state captured when control was acquired.
+`OpenAsync(descriptor)` opens that descriptor; it does not silently choose a different device. `Grid.Width` and `Grid.Height` are 37 and 12. `SetKey` edits every LED assigned to a logical enum key, `SetAt(x, y)` edits emitters at a canvas point, and `SetAll` (also available as `Fill`) edits all 92 frame slots. Enumerating `Grid` yields each mapped `Crush80Key` once, ordered from top to bottom and left to right by its first LED. Coordinates are points on the sparse built-in canvas, not firmware/VIA row-column addresses; gaps have no LEDs. Call `ApplyAsync` to submit the current frame. `await using` disposes the adapter and asks the SDK to restore the state captured when control was acquired.
 
 ## Mapping and hardware safety
 
-The built-in 37 × 12 map is a provisional layout derived from the SignalRGB wired plugin, not a complete physically verified key map. Esc, F1, and Caps Lock have physical-key confirmation; the remaining key assignments have not been physically confirmed. Protocol readback alone does not confirm which physical key lit.
+The built-in 37 × 12 map was derived from the SignalRGB wired plugin. Its mapped key assignments and top-to-bottom, left-to-right traversal have since been visually verified on wired Crush 80 hardware using the sample. Protocol readback alone does not verify physical key identity; this confirmation came from observing the keyboard during traversal.
 
 The keyboard lighting interface requires exclusive control. Close SignalRGB, VIA, and other keyboard controllers before opening the adapter; concurrent writers can invalidate the state snapshot and interfere with writes or restoration. Opening changes lighting to black before the caller's first `ApplyAsync`, so even opening for a read-only-looking grid edit is a hardware write. Grid mutations alone do not perform HID I/O.
 

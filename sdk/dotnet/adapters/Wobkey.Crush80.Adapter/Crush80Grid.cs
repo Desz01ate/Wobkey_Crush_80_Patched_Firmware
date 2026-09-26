@@ -1,13 +1,15 @@
+using System.Collections;
+using System.Collections.Generic;
 using Wobkey.Crush80.Sdk.Models;
 
 namespace Wobkey.Crush80.Adapter;
 
 /// <summary>
-/// A mutable, in-memory sparse canvas for the wired Crush 80's provisional LED map.
-/// Coordinates are canvas points, not VIA matrix addresses. Only Esc, F1, and Caps Lock
-/// have physically confirmed key assignments; other key names await verification.
+/// A mutable, in-memory sparse canvas for the wired Crush 80's physically verified key map.
+/// Coordinates are canvas points, not VIA matrix addresses; the row-major key traversal has
+/// been visually verified on hardware.
 /// </summary>
-public sealed class Crush80Grid
+public sealed class Crush80Grid : IEnumerable<Crush80Key>
 {
     private readonly object _sync;
     private readonly Action _ensureMutable;
@@ -26,7 +28,7 @@ public sealed class Crush80Grid
     public int Height => Crush80Layout.Height;
 
     /// <summary>Colors every LED emitter belonging to a logical key in memory, until explicitly applied.</summary>
-    /// <exception cref="ArgumentOutOfRangeException">The key is not part of the provisional layout.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The key is not part of the built-in layout.</exception>
     public void SetKey(Crush80Key key, Rgb24 color)
     {
         lock (_sync)
@@ -76,7 +78,7 @@ public sealed class Crush80Grid
     }
 
     /// <summary>Colors all 92 LED slots in memory, until explicitly applied.</summary>
-    public void Fill(Rgb24 color)
+    public void SetAll(Rgb24 color)
     {
         lock (_sync)
         {
@@ -84,6 +86,26 @@ public sealed class Crush80Grid
             _frame.AsSpan().Fill(color);
         }
     }
+
+    /// <summary>Colors all 92 LED slots in memory, until explicitly applied.</summary>
+    public void Fill(Rgb24 color) => SetAll(color);
+
+    /// <summary>
+    /// Enumerates each mapped logical key once, ordered by its first LED from top to bottom,
+    /// and left to right within each row.
+    /// </summary>
+    public IEnumerator<Crush80Key> GetEnumerator()
+    {
+        var seen = new HashSet<Crush80Key>();
+        for (var index = 0; index < Crush80Layout.SlotCount; index++)
+        {
+            var key = Crush80Layout.KeyAt(index);
+            if (seen.Add(key))
+                yield return key;
+        }
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     internal ReadOnlyMemory<Rgb24> Frame => _frame;
 }

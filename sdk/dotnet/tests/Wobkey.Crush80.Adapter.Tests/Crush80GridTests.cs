@@ -71,6 +71,37 @@ public sealed class Crush80GridTests
         Assert.Equal(Red, grid.Frame.Span[2]);
         Assert.Equal(Red, grid.Frame.Span[91]);
     }
+    [Fact]
+    public void SetAllColorsEverySlotAndLaterEditsOnlyTheirTargets()
+    {
+        var grid = NewGrid();
+        grid.SetAll(Red);
+
+        Assert.Equal(92, grid.Frame.Length);
+        foreach (var color in grid.Frame.Span)
+            Assert.Equal(Red, color);
+
+        grid.SetKey(Crush80Key.Esc, Blue);
+        Assert.Equal(Blue, grid.Frame.Span[0]);
+        Assert.Equal(Red, grid.Frame.Span[1]);
+        Assert.Equal(Red, grid.Frame.Span[91]);
+    }
+
+    [Fact]
+    public void EnumerationYieldsUniqueMappedKeysInRowMajorOrder()
+    {
+        var keys = NewGrid().ToArray();
+
+        Assert.Equal(89, keys.Length);
+        Assert.Equal(89, keys.Distinct().Count());
+        Assert.Equal(new[] { Crush80Key.Esc, Crush80Key.F1, Crush80Key.F2 }, keys[..3]);
+        Assert.Equal(Crush80Key.GraveAccent, keys[17]);
+        Assert.Equal(Crush80Key.Tab, keys[34]);
+        Assert.Equal(Crush80Key.CapsLock, keys[51]);
+        Assert.Equal(Crush80Key.LeftShift, keys[65]);
+        Assert.Equal(Crush80Key.LeftCtrl, keys[78]);
+        Assert.Equal(Crush80Key.RightArrow, keys[^1]);
+    }
 
     [Fact]
     public void InvalidKeyGapAndCoordinatesRejectWithoutChangingFrame()

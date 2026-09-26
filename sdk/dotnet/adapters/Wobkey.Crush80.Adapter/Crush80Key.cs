@@ -1,9 +1,8 @@
 namespace Wobkey.Crush80.Adapter;
 
 /// <summary>
-/// Logical keys in the built-in provisional wired Crush 80 LED layout. Only Esc, F1,
-/// and Caps Lock have physically confirmed key assignments; all other names are
-/// firmware-derived assignments awaiting physical verification.
+/// Logical keys in the built-in wired Crush 80 LED layout. Key assignments have been
+/// physically verified on a wired keyboard.
 /// </summary>
 public enum Crush80Key
 {
