@@ -31,6 +31,7 @@ The first C# SDK must support Windows, Linux, and macOS, hide HID and firmware p
 - No persistence of RGB frames to keyboard flash.
 - No atomic-frame guarantee; protocol version 1 updates at most eight LEDs per request.
 
+
 ## Architectural decision
 
 Publish one managed NuGet package, `Wobkey.Crush80.Sdk`, targeting `net10.0`. The package has internal layers but a single deployment unit:
@@ -462,3 +463,11 @@ The sample application demonstrates discovery, acquisition with an initial frame
 - **A broad public low-level API would freeze firmware details.** Keep raw packets internal and place necessary device-level controls under `session.Advanced`.
 - **Future effects requirements could distort the base SDK.** Keep scheduling, key semantics, and effects in a separate package built on 92-slot frames.
 - **Language implementations can drift.** Use one versioned conformance corpus executed by the firmware emulator and every SDK implementation.
+
+## Compatibility addendum — 2026-09-26
+
+The original v1-only handshake decision above describes the initial SDK design. A user's Windows sample on optimized firmware physically received capability response `CH8AAFBLUkcCXAgACQsAAAAAAAAAAAAAAAAAAAAAAAA=`: a valid 32-byte PKRG response with version 2, 92 LEDs, eight-LED configuration chunks, disabled override, and streaming metadata of nine LEDs × eleven fragments. The previous exact-v1 parser rejected this response before lighting writes. Optimized firmware commit `a88d8850428830c8d970b85c88987e7f45d94131` retains mode operation 1, RGB configuration GET/SET operation 2, and OEM brightness/effect controls while adding streaming operations 3/4.
+
+The SDK now accepts **only** exact v1 or exact optimized v2 capability formats; v2 additionally requires streaming metadata 9/11. The four-argument `PerKeyRgbCapabilities` constructor is unchanged. Nullable init properties report the stream LED/fragment capacities; `SupportsFrameStreaming` describes firmware support, not SDK usage. Both versions continue to use the existing sequential, acknowledged eight-LED operation-2 reads/writes, capture, and restoration. The SDK does **not** send streaming operations 3/4 or promise atomic frames; a future v2 internal strategy and host-rendered effects remain separate future capabilities.
+
+This change has offline codec, conformance-corpus, and injected-session coverage. The v1 firmware conformance cases remain v1; the v2 capability response is separately recorded. The Windows capability handshake alone does **not** validate sample lighting writes, visual output, or restoration on the device. A new explicitly authorized Windows hardware smoke run is required before claiming verified Windows SDK hardware support.

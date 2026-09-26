@@ -6,6 +6,35 @@ namespace Wobkey.Crush80.Sdk.Tests.Protocol;
 public sealed class ConformanceCorpusTests
 {
     [Fact]
+    public void ParsesEachCompatibleCapabilityResponse()
+    {
+        using var document = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "pkrg-v1.json")));
+        foreach (var item in document.RootElement.GetProperty("compatibleCapabilityResponses").EnumerateArray())
+        {
+            var response = new byte[PkrgV1Codec.PayloadLength];
+            var prefix = item.GetProperty("responsePrefix").EnumerateArray()
+                .Select(value => value.GetByte()).ToArray();
+            prefix.CopyTo(response, 0);
+
+            var capabilities = PkrgV1Codec.ParseCapabilitiesResponse(response);
+
+            Assert.Equal(item.GetProperty("protocolVersion").GetByte(), capabilities.ProtocolVersion);
+            Assert.Equal(92, capabilities.LedCount);
+            Assert.Equal(8, capabilities.ChunkLimit);
+            Assert.False(capabilities.Enabled);
+            var ledMetadata = item.GetProperty("streamLedCount");
+            var chunkMetadata = item.GetProperty("streamChunkCount");
+            Assert.Equal(ledMetadata.ValueKind == JsonValueKind.Null ? null : ledMetadata.GetInt32(),
+                capabilities.StreamLedCount);
+            Assert.Equal(chunkMetadata.ValueKind == JsonValueKind.Null ? null : chunkMetadata.GetInt32(),
+                capabilities.StreamChunkCount);
+            Assert.Equal(item.GetProperty("protocolVersion").GetByte() == 2,
+                capabilities.SupportsFrameStreaming);
+        }
+    }
+
+    [Fact]
     public void CodecBuildsEverySupportedConformanceRequest()
     {
         using var document = JsonDocument.Parse(

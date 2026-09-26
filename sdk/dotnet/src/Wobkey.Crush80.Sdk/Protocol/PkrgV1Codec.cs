@@ -26,17 +26,28 @@ internal static class PkrgV1Codec
     {
         ValidatePkrgResponse(response, GetCommand, Channel, 0, "GetCapabilities");
 
-        if (response[4] != (byte)'P' || response[5] != (byte)'K' ||
-            response[6] != (byte)'R' || response[7] != (byte)'G' ||
-            response[8] != 1 || response[9] != LedCount || response[10] != ChunkLimit ||
-            response[11] > 1)
+        var signatureMatches = response[4] == (byte)'P' && response[5] == (byte)'K' &&
+            response[6] == (byte)'R' && response[7] == (byte)'G';
+        var version = response[8];
+        var streamLeds = response[12];
+        var streamChunks = response[13];
+        if (!signatureMatches || (version != 1 && version != 2) ||
+            response[9] != LedCount || response[10] != ChunkLimit || response[11] > 1 ||
+            (version == 2 && (streamLeds != 9 || streamChunks != 11)))
         {
             throw new IncompatibleFirmwareException(
-                "The device did not report compatible PKRG version 1 capabilities.",
+                $"Expected PKRG version 1 or version 2 (92 LEDs, chunk limit 8; v2 stream 9 LEDs x 11 fragments); " +
+                $"received signature={(signatureMatches ? "PKRG" : "invalid")}, version={version}, " +
+                $"LEDs={response[9]}, chunk limit={response[10]}, enabled={response[11]}, " +
+                $"stream LEDs={streamLeds}, stream fragments={streamChunks}.",
                 operation: "GetCapabilities");
         }
 
-        return new PerKeyRgbCapabilities(1, LedCount, ChunkLimit, response[11] == 1);
+        return new PerKeyRgbCapabilities(version, LedCount, ChunkLimit, response[11] == 1)
+        {
+            StreamLedCount = version == 2 ? streamLeds : null,
+            StreamChunkCount = version == 2 ? streamChunks : null
+        };
     }
 
     internal static void WriteModeGetRequest(Span<byte> destination)

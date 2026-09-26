@@ -172,31 +172,56 @@ public sealed class PkrgV1CodecTests
     }
 
     [Fact]
-    public void ParsesCapabilitiesAndRejectsIncompatibleProtocolVersion()
+    public void ParsesVersionOneWithoutStreamingMetadata()
     {
-        var response = new byte[PkrgV1Codec.PayloadLength];
-        response[0] = 8;
-        response[1] = 127;
-        response[2] = 0;
-        response[4] = (byte)'P';
-        response[5] = (byte)'K';
-        response[6] = (byte)'R';
-        response[7] = (byte)'G';
+        var response = Convert.FromBase64String("CH8AAFBLUkcCXAgACQsAAAAAAAAAAAAAAAAAAAAAAAA=");
         response[8] = 1;
-        response[9] = 92;
-        response[10] = 8;
-        response[11] = 1;
+        response[12] = 0;
+        response[13] = 0;
 
         var capabilities = PkrgV1Codec.ParseCapabilitiesResponse(response);
 
-        Assert.Equal((byte)1, capabilities.ProtocolVersion);
+        Assert.Equal(new PerKeyRgbCapabilities(1, 92, 8, false), capabilities);
+        Assert.Null(capabilities.StreamLedCount);
+        Assert.Null(capabilities.StreamChunkCount);
+        Assert.False(capabilities.SupportsFrameStreaming);
+    }
+
+    [Fact]
+    public void ParsesExactWindowsOptimizedFirmwareCapabilityResponse()
+    {
+        var response = Convert.FromBase64String("CH8AAFBLUkcCXAgACQsAAAAAAAAAAAAAAAAAAAAAAAA=");
+
+        var capabilities = PkrgV1Codec.ParseCapabilitiesResponse(response);
+
+        Assert.Equal((byte)2, capabilities.ProtocolVersion);
         Assert.Equal(92, capabilities.LedCount);
         Assert.Equal(8, capabilities.ChunkLimit);
-        Assert.True(capabilities.Enabled);
+        Assert.False(capabilities.Enabled);
+        Assert.Equal(9, capabilities.StreamLedCount);
+        Assert.Equal(11, capabilities.StreamChunkCount);
+        Assert.True(capabilities.SupportsFrameStreaming);
+    }
 
-        response[8] = 2;
-        Assert.Throws<IncompatibleFirmwareException>(
+    [Theory]
+    [InlineData(2, 8, 11)]
+    [InlineData(2, 9, 10)]
+    [InlineData(3, 9, 11)]
+    public void RejectsUnsupportedCapabilityFormats(byte version, byte streamLeds, byte streamChunks)
+    {
+        var response = Convert.FromBase64String("CH8AAFBLUkcCXAgACQsAAAAAAAAAAAAAAAAAAAAAAAA=");
+        response[8] = version;
+        response[12] = streamLeds;
+        response[13] = streamChunks;
+
+        var error = Assert.Throws<IncompatibleFirmwareException>(
             () => PkrgV1Codec.ParseCapabilitiesResponse(response));
+        Assert.Contains("version 1 or version 2", error.Message);
+        Assert.Contains($"version={version}", error.Message);
+        Assert.Contains($"stream LEDs={streamLeds}", error.Message);
+        Assert.Contains($"stream fragments={streamChunks}", error.Message);
+        Assert.Contains("LEDs=92", error.Message);
+        Assert.Contains("chunk limit=8", error.Message);
     }
 
     [Fact]

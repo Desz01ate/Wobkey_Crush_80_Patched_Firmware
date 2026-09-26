@@ -4,6 +4,22 @@
   "protocolVersion": 1,
   "ledCount": 92,
   "chunkLimit": 8,
+  "compatibleCapabilityResponses": [
+    {
+      "name": "pkrg-v1-disabled",
+      "responsePrefix": [8, 127, 0, 0, 80, 75, 82, 71, 1, 92, 8, 0],
+      "protocolVersion": 1,
+      "streamLedCount": null,
+      "streamChunkCount": null
+    },
+    {
+      "name": "pkrg-v2-optimized-windows-observation",
+      "responsePrefix": [8, 127, 0, 0, 80, 75, 82, 71, 2, 92, 8, 0, 9, 11],
+      "protocolVersion": 2,
+      "streamLedCount": 9,
+      "streamChunkCount": 11
+    }
+  ],
   "protocolCases": [
     {
       "name": "capabilities-disabled",

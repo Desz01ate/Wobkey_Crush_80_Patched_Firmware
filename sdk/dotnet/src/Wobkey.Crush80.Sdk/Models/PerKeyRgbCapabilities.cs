@@ -9,4 +9,15 @@ public sealed record PerKeyRgbCapabilities(
     byte ProtocolVersion,
     int LedCount,
     int ChunkLimit,
-    bool Enabled);
+    bool Enabled)
+{
+    /// <summary>The advertised LEDs per frame fragment, if reported by PKRG v2.</summary>
+    public int? StreamLedCount { get; init; }
+
+    /// <summary>The advertised fragment count, if reported by PKRG v2.</summary>
+    public int? StreamChunkCount { get; init; }
+
+    /// <summary>Whether firmware advertises the PKRG v2 frame-streaming format. SDK writes remain sequential.</summary>
+    public bool SupportsFrameStreaming =>
+        ProtocolVersion == 2 && StreamLedCount is 9 && StreamChunkCount is 11;
+}

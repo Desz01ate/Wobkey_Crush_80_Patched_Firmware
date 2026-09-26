@@ -154,16 +154,6 @@ public sealed class PkrgV1ClientTests
     }
 
     [Fact]
-    public async Task IncompatibleCapabilitiesPropagateFirmwareError()
-    {
-        await using var transport = new FakeFirmwareTransport { ProtocolVersion = 2 };
-        var client = new PkrgV1Client(transport, TimeSpan.FromSeconds(2));
-
-        var error = await Assert.ThrowsAsync<IncompatibleFirmwareException>(
-            async () => await client.GetCapabilitiesAsync(CancellationToken.None));
-        Assert.Equal("GetCapabilities", error.Operation);
-    }
-    [Fact]
     public async Task InvalidModePacketCannotMutateFirmware()
     {
         await using var transport = new FakeFirmwareTransport();

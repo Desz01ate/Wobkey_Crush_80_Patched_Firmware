@@ -7,6 +7,8 @@ internal sealed class FakeFirmwareTransport : IHidTransport
     internal byte ProtocolVersion { get; set; } = 1;
     internal byte LedCount { get; set; } = 92;
     internal byte ChunkLimit { get; set; } = 8;
+    internal byte StreamLedCount { get; set; } = 9;
+    internal byte StreamChunkCount { get; set; } = 11;
     private readonly byte[] _pending = new byte[32];
     private readonly TaskCompletionSource<bool> _firstWriteObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<bool> _releaseWrites = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -174,6 +176,8 @@ internal sealed class FakeFirmwareTransport : IHidTransport
             reply[9] = LedCount;
             reply[10] = ChunkLimit;
             reply[11] = Enabled ? (byte)1 : (byte)0;
+            reply[12] = ProtocolVersion == 2 ? StreamLedCount : (byte)0;
+            reply[13] = ProtocolVersion == 2 ? StreamChunkCount : (byte)0;
         }
         else if (id == 1)
         {
