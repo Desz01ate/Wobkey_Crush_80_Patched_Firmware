@@ -45,6 +45,17 @@ disposing the lease does the same by default. Set
 `RgbControlOptions.RestoreStateOnDispose = false` to release ownership without
 restoring the snapshot. Dispose or restore the lease before closing its session.
 
+The lease provides `WriteFrameAsync`, `WriteRangeAsync`, `FillAsync`,
+`ReadFrameAsync`, and `SetHardwareBrightnessAsync` (0–9). Frame writes compare
+against the last acknowledged colors and transmit only changed eight-LED
+chunks; a rejected chunk is retried on the next write without resending
+acknowledged chunks. Range writes update only their supplied slots. Fill uses
+the same cached frame path. Reads return the raw 92-color device buffer,
+before hardware brightness scaling. Keep supplied write memory unchanged until
+the operation completes. Argument validation precedes queueing; complete
+lease operations share the session's serial gate, so concurrent writes, reads,
+fills, and brightness changes cannot interleave.
+
 ## The Problem
 
 The VIA SET handler at `0xDA20` stores the H byte to the internal state struct but then overwrites the RGB fields with stale cached values from global RAM instead of converting H to RGB. The result is that any color set through VIA (including SignalRGB) is ignored — the keyboard stays on whatever color was last set locally.
