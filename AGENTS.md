@@ -1,6 +1,6 @@
 # AGENTS.md — Agent & Contributor Operating Guide
 
-Welcome to the **Wobkey Crush 80 Patched Firmware & RGB Ecosystem** repository (`Desz01ate/Wobkey_Crush_80_Patched_Firmware`). This guide provides technical architecture, safety constraints, toolchains, build recipes, and test workflows for autonomous agents and human developers.
+Technical architecture, hardware safety constraints, toolchains, build recipes, and verification workflows for autonomous agents and human contributors working on `Desz01ate/Wobkey_Crush_80_Patched_Firmware`.
 
 ---
 
@@ -194,6 +194,27 @@ dotnet test sdk/dotnet/Wobkey.Crush80.Sdk.sln -c Release
 # Test Emulator:
 dotnet test emulator/Wobkey.Crush80.Emulator.sln -c Release
 ```
+
+### 4. Online Hardware Verification & Safety Protocol
+
+> 🛑 **MANDATORY SAFETY GATE FOR PHYSICAL HARDWARE**
+>
+> 1. **Explicit User Consent Required**: Never run hardware-writing tests (`--smoke`), flash firmware, or issue raw VIA override packets automatically. Always request and receive explicit consent from the user before accessing physical HID devices.
+> 2. **Mandatory Backups Prior to Execution**:
+>    - **Backup VIA Profile**: Save current VIA layout and RGB state before any hardware interaction:
+>      ```sh
+>      python3 host/linux/via_backup.py save via_config_backup.json
+>      ```
+>    - **Verify Stock Recovery Binaries**: Ensure `firmware/sources/firmware.bin` and `firmware/sources/code_2M.bin` are available in case emergency OTA restore is needed.
+> 3. **Manual Interactive Verification**:
+>    - Once backed up and confirmed by user, execute targeted smoke test:
+>      ```sh
+>      python3 host/linux/per_key_rgb.py --smoke
+>      ```
+>    - If config corruption occurs, restore VIA profile immediately:
+>      ```sh
+>      python3 host/linux/via_backup.py restore via_config_backup.json
+>      ```
 
 ---
 
