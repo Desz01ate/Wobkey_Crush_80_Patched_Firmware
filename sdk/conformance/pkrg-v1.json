@@ -24,7 +24,11 @@
     {
       "name": "capabilities-disabled",
       "request": [8, 127, 0],
-      "expectedPrefix": [8, 127, 0, 0, 80, 75, 82, 71, 1, 92, 8, 0],
+      "expectedPrefix": [8, 127, 0, 0, 80, 75, 82, 71, 2, 92, 8, 0, 9, 11],
+      "expectedPrefixes": [
+        [8, 127, 0, 0, 80, 75, 82, 71, 1, 92, 8, 0],
+        [8, 127, 0, 0, 80, 75, 82, 71, 2, 92, 8, 0, 9, 11]
+      ],
       "expectedStatus": 0
     },
     {
